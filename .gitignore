@@ -1,0 +1,57 @@
+# Python cache / bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env.bak/
+venv.bak/
+
+# Build / packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Test / coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# IDE / editor
+.vscode/
+.idea/
+*.code-workspace
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs and runtime outputs
+logs/
+*.log
+
+# RL / experiment artifacts
+models/
+tb_log/
+
+# Local environment variable files
+.env
+.env.*
+
+# SUMO outputs / temporary simulation files
+*.sumo-output.xml
+*.tripinfo.xml
+*.fcd.xml
+*.queue.xml
+*.emissions.xml
+*.summary.xml
+*.stat.xml
