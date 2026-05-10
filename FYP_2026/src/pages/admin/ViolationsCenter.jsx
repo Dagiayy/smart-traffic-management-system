@@ -1,40 +1,53 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSimulation } from '@/lib/SimulationContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { AlertTriangle, Filter, RefreshCw, ChevronDown } from 'lucide-react';
+import { AlertTriangle, Filter, RefreshCw } from 'lucide-react';
+import { violationsApi } from '@/api/admin';
+import { openViolationFeed } from '@/api/websocket';
 
-const VIOLATION_TYPES = ['Red Light', 'Speeding', 'Wrong Lane', 'Blocked Box', 'No Stop'];
-const LANES = ['North', 'South', 'East', 'West'];
-const STATUSES = ['Detected', 'Under Review', 'Confirmed', 'Dismissed'];
+const STATUS_COLOR = {
+  DETECTED: 'bg-blue-100 text-blue-700',
+  UNDER_REVIEW: 'bg-yellow-100 text-yellow-700',
+  CONFIRMED: 'bg-red-100 text-red-700',
+  DISMISSED: 'bg-gray-100 text-gray-500',
+  SUBMITTED: 'bg-purple-100 text-purple-700',
+  SYNCED: 'bg-teal-100 text-teal-700',
+};
 
-function generateViolation(id, tick) {
-  const type = VIOLATION_TYPES[Math.floor(Math.random() * VIOLATION_TYPES.length)];
-  const lane = LANES[Math.floor(Math.random() * LANES.length)];
-  const status = STATUSES[Math.floor(Math.random() * STATUSES.length)];
-  const plate = `${String.fromCharCode(65 + Math.floor(Math.random() * 26))}${String.fromCharCode(65 + Math.floor(Math.random() * 26))}-${Math.floor(1000 + Math.random() * 9000)}`;
-  return { id, type, lane, status, plate, tick, speed: Math.floor(40 + Math.random() * 60), time: new Date(Date.now() - Math.random() * 3600000).toLocaleTimeString() };
-}
+const SEV_COLOR = {
+  MINOR: 'bg-sky-100 text-sky-700',
+  MAJOR: 'bg-amber-100 text-amber-700',
+  CRITICAL: 'bg-red-100 text-red-700',
+};
 
 export default function ViolationsCenter() {
   const { state } = useSimulation();
-  const [violations, setViolations] = useState(() => Array.from({ length: 12 }, (_, i) => generateViolation(i + 1, i + 1)));
-  const [filter, setFilter] = useState('All');
-  const [statusFilter, setStatusFilter] = useState('All');
+  const queryClient = useQueryClient();
+  const [statusFilter, setStatusFilter] = useState('');
+  const [severityFilter, setSeverityFilter] = useState('');
 
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ['admin-violations', statusFilter, severityFilter],
+    queryFn: () => violationsApi.list({
+      ...(statusFilter && { status: statusFilter }),
+      ...(severityFilter && { severity: severityFilter }),
+      page_size: 50,
+    }).then(r => r.data),
+    staleTime: 10000,
+  });
+
+  // Live WebSocket feed — new violations appear in real time
   useEffect(() => {
-    if (state.running && state.tick % 5 === 0 && state.tick > 0) {
-      setViolations(v => [generateViolation(Date.now(), state.tick), ...v].slice(0, 50));
-    }
-  }, [state.tick]);
+    const ws = openViolationFeed(() => {
+      queryClient.invalidateQueries({ queryKey: ['admin-violations'] });
+    });
+    return () => ws.close();
+  }, [queryClient]);
 
-  const filtered = violations.filter(v =>
-    (filter === 'All' || v.type === filter) &&
-    (statusFilter === 'All' || v.status === statusFilter)
-  );
-
-  const statusColor = { 'Detected': 'bg-blue-100 text-blue-700', 'Under Review': 'bg-yellow-100 text-yellow-700', 'Confirmed': 'bg-red-100 text-red-700', 'Dismissed': 'bg-gray-100 text-gray-500' };
+  const violations = data?.results ?? [];
 
   return (
     <div className="p-6 space-y-5">
@@ -42,20 +55,29 @@ export default function ViolationsCenter() {
         <div className="flex items-center gap-2">
           <AlertTriangle className="w-5 h-5 text-red-500" />
           <h1 className="text-xl font-bold">Violations Center</h1>
-          <Badge variant="destructive" className="text-xs">{violations.length} total</Badge>
+          <Badge variant="destructive" className="text-xs">{data?.count ?? 0} total</Badge>
+          <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" title="Live feed active" />
         </div>
-        <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setViolations(v => [generateViolation(Date.now(), state.tick), ...v].slice(0, 50))}>
-          <RefreshCw className="w-3 h-3 mr-1" /> Generate New
+        <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => refetch()}>
+          <RefreshCw className="w-3 h-3 mr-1" /> Refresh
         </Button>
       </div>
 
-      {/* Stats */}
+      {/* Summary cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {VIOLATION_TYPES.slice(0, 4).map(type => (
-          <Card key={type}>
+        {[
+          { label: 'Detected', status: 'DETECTED', color: 'text-blue-600' },
+          { label: 'Under Review', status: 'UNDER_REVIEW', color: 'text-yellow-600' },
+          { label: 'Confirmed', status: 'CONFIRMED', color: 'text-red-600' },
+          { label: 'Dismissed', status: 'DISMISSED', color: 'text-gray-500' },
+        ].map(s => (
+          <Card key={s.status} className="cursor-pointer hover:border-primary/30 transition-colors"
+            onClick={() => setStatusFilter(f => f === s.status ? '' : s.status)}>
             <CardContent className="pt-4 pb-3 px-4">
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wide">{type}</p>
-              <p className="text-2xl font-bold font-mono text-foreground">{violations.filter(v => v.type === type).length}</p>
+              <p className="text-[10px] text-muted-foreground uppercase">{s.label}</p>
+              <p className={`text-2xl font-bold font-mono ${s.color}`}>
+                {violations.filter(v => v.status === s.status).length}
+              </p>
             </CardContent>
           </Card>
         ))}
@@ -65,15 +87,21 @@ export default function ViolationsCenter() {
       <div className="flex flex-wrap gap-2">
         <div className="flex items-center gap-1">
           <Filter className="w-3.5 h-3.5 text-muted-foreground" />
-          <span className="text-xs text-muted-foreground">Type:</span>
-          {['All', ...VIOLATION_TYPES].map(f => (
-            <button key={f} onClick={() => setFilter(f)} className={`px-2.5 py-1 rounded-full text-[10px] font-medium transition-all ${filter === f ? 'bg-primary text-white' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}>{f}</button>
+          <span className="text-xs text-muted-foreground">Status:</span>
+          {['', 'DETECTED', 'UNDER_REVIEW', 'CONFIRMED', 'DISMISSED'].map(s => (
+            <button key={s} onClick={() => setStatusFilter(s)}
+              className={`px-2.5 py-1 rounded-full text-[10px] font-medium transition-all ${statusFilter === s ? 'bg-primary text-white' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}>
+              {s || 'All'}
+            </button>
           ))}
         </div>
         <div className="flex items-center gap-1 ml-4">
-          <span className="text-xs text-muted-foreground">Status:</span>
-          {['All', ...STATUSES].map(s => (
-            <button key={s} onClick={() => setStatusFilter(s)} className={`px-2.5 py-1 rounded-full text-[10px] font-medium transition-all ${statusFilter === s ? 'bg-primary text-white' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}>{s}</button>
+          <span className="text-xs text-muted-foreground">Severity:</span>
+          {['', 'MINOR', 'MAJOR', 'CRITICAL'].map(s => (
+            <button key={s} onClick={() => setSeverityFilter(s)}
+              className={`px-2.5 py-1 rounded-full text-[10px] font-medium transition-all ${severityFilter === s ? 'bg-primary text-white' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}>
+              {s || 'All'}
+            </button>
           ))}
         </div>
       </div>
@@ -85,28 +113,44 @@ export default function ViolationsCenter() {
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-border bg-muted/50">
-                  {['#', 'Plate', 'Type', 'Lane', 'Speed', 'Status', 'Time'].map(h => (
+                  {['#', 'Plate', 'Type', 'Severity', 'Source', 'Location', 'Status', 'Date'].map(h => (
                     <th key={h} className="text-left px-4 py-3 text-[10px] text-muted-foreground font-semibold uppercase tracking-wide">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((v, i) => (
+                {isLoading && (
+                  <tr><td colSpan={8} className="text-center py-8 text-muted-foreground">Loading violations…</td></tr>
+                )}
+                {!isLoading && violations.length === 0 && (
+                  <tr><td colSpan={8} className="text-center py-8 text-muted-foreground">No violations found</td></tr>
+                )}
+                {violations.map((v, i) => (
                   <tr key={v.id} className={`border-b border-border/50 hover:bg-muted/20 transition-colors ${i % 2 === 0 ? '' : 'bg-muted/10'}`}>
                     <td className="px-4 py-2.5 font-mono text-muted-foreground">{String(i + 1).padStart(3, '0')}</td>
-                    <td className="px-4 py-2.5 font-mono font-bold text-foreground">{v.plate}</td>
-                    <td className="px-4 py-2.5 font-medium">{v.type}</td>
-                    <td className="px-4 py-2.5 text-muted-foreground">{v.lane}</td>
-                    <td className="px-4 py-2.5 font-mono">{v.speed} km/h</td>
+                    <td className="px-4 py-2.5 font-mono font-bold text-foreground">{v.plate_number}</td>
+                    <td className="px-4 py-2.5 font-medium">{v.violation_type?.name ?? v.type_code}</td>
                     <td className="px-4 py-2.5">
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${statusColor[v.status]}`}>{v.status}</span>
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${SEV_COLOR[v.severity] ?? 'bg-gray-100 text-gray-600'}`}>{v.severity}</span>
                     </td>
-                    <td className="px-4 py-2.5 text-muted-foreground font-mono">{v.time}</td>
+                    <td className="px-4 py-2.5 text-muted-foreground">{v.source === 'AI_DETECTION' ? '🤖 AI' : '👮 Officer'}</td>
+                    <td className="px-4 py-2.5 text-muted-foreground max-w-[140px] truncate">{v.location_name ?? '—'}</td>
+                    <td className="px-4 py-2.5">
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${STATUS_COLOR[v.status] ?? 'bg-gray-100 text-gray-500'}`}>{v.status}</span>
+                    </td>
+                    <td className="px-4 py-2.5 text-muted-foreground font-mono whitespace-nowrap">
+                      {new Date(v.detected_at).toLocaleString()}
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+          {data?.next && (
+            <div className="p-3 text-center border-t border-border">
+              <span className="text-xs text-muted-foreground">Showing {violations.length} of {data.count} violations</span>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
