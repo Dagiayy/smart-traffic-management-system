@@ -13,6 +13,7 @@ import '../../../core/storage/app_storage.dart';
 import '../../../shared/models/app_user.dart';
 import '../../../shared/widgets/shared_widgets.dart';
 import '../../tickets/data/ticket_data.dart';
+import '../../dashboard/data/dashboard_data.dart';
 
 class NewTicketScreen extends ConsumerStatefulWidget {
   const NewTicketScreen({super.key});
@@ -76,14 +77,15 @@ class _NewTicketScreenState extends ConsumerState<NewTicketScreen> {
     setState(() => _submitting = true);
     try {
       final repo = ref.read(ticketsRepositoryProvider);
-      FieldTicket ticket;
+      FieldTicket? ticket;
+
+      // Try to create ticket on backend
       try {
         ticket = await repo.createTicket(draft);
-        if (!asDraft) await repo.submitTicket(ticket.id);
-      } catch (e) {
-        // If offline, save to queue
+      } catch (_) {
+        // Truly offline — save to local queue and exit
         await AppStorage.instance.addToOfflineQueue(draft.toOfflineJson());
-        ref.invalidate(offlineQueueProvider);
+        ref.read(offlineQueueProvider.notifier).state = AppStorage.instance.getOfflineQueue();
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Saved offline. Will sync when connected.')));
@@ -91,7 +93,18 @@ class _NewTicketScreenState extends ConsumerState<NewTicketScreen> {
         }
         return;
       }
+
+      // Ticket created on backend — now optionally submit it
+      if (!asDraft) {
+        try {
+          await repo.submitTicket(ticket.id);
+        } catch (_) {
+          // Ticket exists as DRAFT on server — navigate there so officer can submit manually
+        }
+      }
+
       ref.invalidate(ticketsListProvider);
+      ref.invalidate(dashboardSummaryProvider);
       ref.read(ticketDraftProvider.notifier).state = TicketDraft();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

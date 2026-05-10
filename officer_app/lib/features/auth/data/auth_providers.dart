@@ -53,6 +53,13 @@ class AuthController extends StateNotifier<AuthState> {
   }
 
   void updateUser(AppUser u) => state = AuthAuthenticated(u);
+
+  Future<void> refreshUser() async {
+    try {
+      final fresh = await _repo.getMe();
+      state = AuthAuthenticated(fresh);
+    } catch (_) {}
+  }
 }
 
 final authControllerProvider = StateNotifierProvider<AuthController, AuthState>((ref) =>
