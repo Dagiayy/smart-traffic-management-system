@@ -28,6 +28,7 @@ class _SyncScreenState extends ConsumerState<SyncScreen> {
     try {
       final repo = ref.read(ticketsRepositoryProvider);
       final result = await repo.bulkSync(queue);
+      debugPrint('Bulk sync result: $result'); // Add this line for debugging
       final synced = (result['synced'] as List? ?? []).map((e) => e.toString()).toList();
       final failed = (result['failed'] as List? ?? []).map((e) => e.toString()).toList();
       // Remove synced from queue
