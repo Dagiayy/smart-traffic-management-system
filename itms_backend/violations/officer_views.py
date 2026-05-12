@@ -1,6 +1,8 @@
 """violations/officer_views.py — Officer & Supervisor field enforcement views"""
+from datetime import timedelta
 from django.utils import timezone
 from django.db import transaction
+from django.db.models import Count, Q, Sum
 from rest_framework import generics, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -26,12 +28,24 @@ class OfficerTicketsView(APIView):
         status_f = request.query_params.get('status')
         date_from = request.query_params.get('date_from')
         date_to = request.query_params.get('date_to')
+        q = request.query_params.get('q', '').strip()
+        severity_f = request.query_params.get('severity')
         if status_f:
             qs = qs.filter(status=status_f)
+        if severity_f:
+            qs = qs.filter(severity=severity_f)
         if date_from:
             qs = qs.filter(detected_at__date__gte=date_from)
         if date_to:
             qs = qs.filter(detected_at__date__lte=date_to)
+        if q:
+            qs = qs.filter(
+                Q(vehicle__plate_number__icontains=q) |
+                Q(driver_name__icontains=q) |
+                Q(driver_license__icontains=q) |
+                Q(violation_type__name__icontains=q) |
+                Q(notes__icontains=q)
+            )
 
         from itms_backend.pagination import StandardPagination
         paginator = StandardPagination()
@@ -273,6 +287,328 @@ class ViolationTypesView(generics.ListAPIView):
     permission_classes = [IsOfficerOrAbove]
     serializer_class = ViolationTypeSerializer
     queryset = ViolationType.objects.filter(is_active=True).order_by('name')
+
+
+class OfficerDashboardView(APIView):
+    """Aggregated dashboard stats for the authenticated officer."""
+    permission_classes = [IsOfficerOrAbove]
+
+    def get(self, request):
+        officer = request.user
+        today = timezone.now().date()
+        week_ago = today - timedelta(days=7)
+
+        base = Violation.objects.filter(officer=officer, source='OFFICER_FIELD')
+
+        tickets_today = base.filter(detected_at__date=today).count()
+        tickets_week  = base.filter(detected_at__date__gte=week_ago).count()
+        tickets_month = base.filter(detected_at__date__gte=today.replace(day=1)).count()
+        pending = base.filter(status='DRAFT').count()
+        submitted = base.filter(status='SUBMITTED').count()
+        confirmed = base.filter(status='CONFIRMED').count()
+        dismissed = base.filter(status='DISMISSED').count()
+        total     = base.count()
+
+        return Response({
+            'tickets_today': tickets_today,
+            'tickets_week': tickets_week,
+            'tickets_month': tickets_month,
+            'pending_submissions': pending,
+            'submitted_count': submitted,
+            'confirmed_count': confirmed,
+            'dismissed_count': dismissed,
+            'total_tickets': total,
+            'unsynced_count': 0,
+            'alerts': [],
+        })
+
+
+class OfficerAnalyticsView(APIView):
+    """Officer-specific analytics for the reports page."""
+    permission_classes = [IsOfficerOrAbove]
+
+    def get(self, request):
+        officer = request.user
+        period  = request.query_params.get('period', 'week')
+        today   = timezone.now().date()
+
+        if period == 'day':
+            date_from = today
+        elif period == 'month':
+            date_from = today.replace(day=1)
+        else:
+            date_from = today - timedelta(days=7)
+
+        base = Violation.objects.filter(
+            officer=officer, source='OFFICER_FIELD',
+            detected_at__date__gte=date_from
+        )
+
+        total     = base.count()
+        confirmed = base.filter(status='CONFIRMED').count()
+        dismissed = base.filter(status='DISMISSED').count()
+        critical  = base.filter(severity='CRITICAL').count()
+        major     = base.filter(severity='MAJOR').count()
+        minor     = base.filter(severity='MINOR').count()
+
+        # Violations by type
+        by_type = list(
+            base.values('violation_type__name')
+                .annotate(count=Count('id'))
+                .order_by('-count')[:10]
+        )
+        by_type_formatted = [{'name': r['violation_type__name'], 'count': r['count']} for r in by_type]
+
+        # Daily breakdown — last 7 days counts
+        daily = []
+        for i in range(6, -1, -1):
+            d = today - timedelta(days=i)
+            daily.append(base.filter(detected_at__date=d).count())
+
+        # Total fines amount from this officer's confirmed violations
+        total_fines = Fine.objects.filter(
+            violation__officer=officer,
+            violation__detected_at__date__gte=date_from,
+        ).aggregate(total=Sum('amount'))['total'] or 0
+
+        return Response({
+            'period': period,
+            'total': total,
+            'confirmed': confirmed,
+            'dismissed': dismissed,
+            'critical': critical,
+            'major': major,
+            'minor': minor,
+            'by_type': by_type_formatted,
+            'daily': daily,
+            'total_collected': float(total_fines),
+        })
+
+
+class OfficerDailyReportView(APIView):
+    """Officer's own daily performance report."""
+    permission_classes = [IsOfficerOrAbove]
+
+    def get(self, request):
+        officer = request.user
+        today   = timezone.now().date()
+
+        base = Violation.objects.filter(
+            officer=officer, source='OFFICER_FIELD', detected_at__date=today
+        )
+        tickets_issued  = base.count()
+        fines_generated = Fine.objects.filter(
+            violation__officer=officer, created_at__date=today
+        ).count()
+        escalated = base.filter(status='ESCALATED').count()
+
+        return Response({
+            'tickets_issued': tickets_issued,
+            'fines_generated': fines_generated,
+            'escalated': escalated,
+            'sync_failures': 0,
+            'total': tickets_issued,
+            'confirmed': base.filter(status='CONFIRMED').count(),
+            'dismissed': base.filter(status='DISMISSED').count(),
+        })
+
+
+class OfficerPerformanceView(APIView):
+    """Officer's personal performance metrics."""
+    permission_classes = [IsOfficerOrAbove]
+
+    def get(self, request):
+        from django.db.models import Count as DCount
+        from django.contrib.auth import get_user_model
+        officer = request.user
+        today    = timezone.now().date()
+        week_ago = today - timedelta(days=7)
+        month_start = today.replace(day=1)
+
+        base = Violation.objects.filter(officer=officer, source='OFFICER_FIELD')
+        today_qs = base.filter(detected_at__date=today)
+        week_qs  = base.filter(detected_at__date__gte=week_ago)
+
+        tickets_today = today_qs.count()
+        tickets_week  = week_qs.count()
+        tickets_total = base.count()
+        pending       = base.filter(status__in=['DRAFT', 'SUBMITTED']).count()
+        rejected      = base.filter(status='DISMISSED').count()
+        confirmed     = base.filter(status='CONFIRMED').count()
+
+        accuracy_pct = round((confirmed / tickets_total * 100) if tickets_total > 0 else 0)
+
+        # Weekly breakdown: last 7 days
+        weekly = []
+        for i in range(6, -1, -1):
+            d = today - timedelta(days=i)
+            weekly.append(base.filter(detected_at__date=d).count())
+
+        # Rank among officers this month by confirmed tickets
+        officer_rankings = (
+            Violation.objects.filter(source='OFFICER_FIELD', detected_at__date__gte=month_start, status='CONFIRMED')
+            .values('officer')
+            .annotate(cnt=DCount('id'))
+            .order_by('-cnt')
+        )
+        rank = next((i + 1 for i, r in enumerate(officer_rankings) if str(r['officer']) == str(officer.id)), None)
+        if rank is None:
+            month_confirmed = base.filter(detected_at__date__gte=month_start, status='CONFIRMED').count()
+            rank = officer_rankings.count() + 1 if month_confirmed == 0 else officer_rankings.count()
+
+        # Monthly progress (all statuses)
+        month_progress = base.filter(detected_at__date__gte=month_start).count()
+        monthly_target = 20
+
+        # Streak: consecutive days with at least 1 ticket going back from today
+        streak = 0
+        check_day = today
+        while True:
+            if base.filter(detected_at__date=check_day).exists():
+                streak += 1
+                check_day -= timedelta(days=1)
+            else:
+                break
+
+        # Top violation type
+        top_viol_qs = (base.values('violation_type__name').annotate(cnt=DCount('id')).order_by('-cnt').first())
+        top_violation = top_viol_qs['violation_type__name'] if top_viol_qs else None
+
+        return Response({
+            'tickets_today': tickets_today,
+            'tickets_week': tickets_week,
+            'tickets_total': tickets_total,
+            'pending': pending,
+            'rejected': rejected,
+            'confirmed': confirmed,
+            'accuracy_pct': accuracy_pct,
+            'weekly': weekly,
+            'rank': rank,
+            'monthly_target': monthly_target,
+            'month_progress': month_progress,
+            'streak': streak,
+            'top_violation': top_violation,
+        })
+
+
+class OfficerSearchViolationsView(APIView):
+    """Search ALL violations (any officer/source) by plate, driver, type — for officer lookups."""
+    permission_classes = [IsOfficerOrAbove]
+
+    def get(self, request):
+        q        = request.query_params.get('q', '').strip()
+        plate    = request.query_params.get('plate', '').strip().upper()
+        status_f = request.query_params.get('status')
+        severity = request.query_params.get('severity')
+        date_from= request.query_params.get('date_from')
+        date_to  = request.query_params.get('date_to')
+
+        qs = Violation.objects.select_related('violation_type', 'vehicle', 'intersection', 'officer')
+
+        if plate:
+            qs = qs.filter(vehicle__plate_number__icontains=plate)
+        if q:
+            qs = qs.filter(
+                Q(vehicle__plate_number__icontains=q) |
+                Q(driver_name__icontains=q) |
+                Q(driver_license__icontains=q) |
+                Q(violation_type__name__icontains=q)
+            )
+        if status_f:
+            qs = qs.filter(status=status_f)
+        if severity:
+            qs = qs.filter(severity=severity)
+        if date_from:
+            qs = qs.filter(detected_at__date__gte=date_from)
+        if date_to:
+            qs = qs.filter(detected_at__date__lte=date_to)
+
+        from itms_backend.pagination import StandardPagination
+        paginator = StandardPagination()
+        page = paginator.paginate_queryset(qs.order_by('-detected_at'), request)
+        return paginator.get_paginated_response(
+            ViolationSerializer(page, many=True, context={'request': request}).data
+        )
+
+
+class OfficerUpdateProfileView(APIView):
+    """Officer update own profile (name, phone) and change password."""
+    permission_classes = [IsOfficerOrAbove]
+
+    def get(self, request):
+        from accounts.serializers import UserSerializer
+        data = UserSerializer(request.user).data
+        try:
+            profile = request.user.profile
+            data['notification_preferences'] = profile.notification_preferences or {}
+        except Exception:
+            data['notification_preferences'] = {}
+        return Response(data)
+
+    def patch(self, request):
+        user = request.user
+        full_name = request.data.get('full_name')
+        phone     = request.data.get('phone_number')
+        email     = request.data.get('email')
+
+        if full_name:
+            user.full_name = full_name
+        if phone:
+            user.phone_number = phone
+        if email:
+            user.email = email
+        user.save()
+
+        # Change password if provided
+        old_pw  = request.data.get('old_password')
+        new_pw  = request.data.get('new_password')
+        if old_pw and new_pw:
+            if not user.check_password(old_pw):
+                return Response({'error': 'Current password is incorrect.'}, status=400)
+            user.set_password(new_pw)
+            user.save()
+
+        # Update notification preferences if provided
+        notif_prefs = request.data.get('notification_preferences')
+        if notif_prefs and isinstance(notif_prefs, dict):
+            from accounts.models import UserProfile
+            profile, _ = UserProfile.objects.get_or_create(user=user)
+            profile.notification_preferences = notif_prefs
+            profile.save(update_fields=['notification_preferences'])
+
+        from accounts.serializers import UserSerializer
+        data = UserSerializer(user).data
+        try:
+            profile = user.profile
+            data['notification_preferences'] = profile.notification_preferences or {}
+        except Exception:
+            data['notification_preferences'] = {}
+        return Response(data)
+
+
+class OfficerProfileEditRequestView(APIView):
+    """Officer submits a request to edit their profile fields (admin-approved)."""
+    permission_classes = [IsOfficerOrAbove]
+
+    def post(self, request):
+        from accounts.models import ProfileEditRequest
+        field_name = request.data.get('field_name', '').strip()
+        requested_value = request.data.get('requested_value', '').strip()
+        reason = request.data.get('reason', '').strip()
+        if not field_name or not requested_value or not reason:
+            return Response({'error': 'field_name, requested_value, and reason are required.'}, status=400)
+        allowed_fields = {'full_name', 'email', 'phone_number'}
+        if field_name not in allowed_fields:
+            return Response({'error': f'field_name must be one of: {", ".join(allowed_fields)}'}, status=400)
+        current_value = getattr(request.user, field_name, '') or ''
+        ProfileEditRequest.objects.create(
+            officer=request.user,
+            field_name=field_name,
+            current_value=str(current_value),
+            requested_value=requested_value,
+            reason=reason,
+        )
+        return Response({'message': 'Edit request submitted successfully.'}, status=201)
 
 
 # ── Supervisor Views ──────────────────────────────────────────────────────

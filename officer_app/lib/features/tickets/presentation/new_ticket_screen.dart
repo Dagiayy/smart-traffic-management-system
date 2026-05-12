@@ -1,10 +1,12 @@
 import 'dart:io';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../../../core/services/auto_sync_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
@@ -13,6 +15,7 @@ import '../../../core/storage/app_storage.dart';
 import '../../../shared/models/app_user.dart';
 import '../../../shared/widgets/shared_widgets.dart';
 import '../../tickets/data/ticket_data.dart';
+import '../../dashboard/data/dashboard_data.dart';
 
 class NewTicketScreen extends ConsumerStatefulWidget {
   const NewTicketScreen({super.key});
@@ -76,22 +79,51 @@ class _NewTicketScreenState extends ConsumerState<NewTicketScreen> {
     setState(() => _submitting = true);
     try {
       final repo = ref.read(ticketsRepositoryProvider);
-      FieldTicket ticket;
+      FieldTicket? ticket;
+
+      // Try to create ticket on backend immediately.
+      // Only fall back to the offline queue on genuine network errors —
+      // not on 4xx/5xx responses (those are validation/server issues the
+      // officer should see immediately, not silently queue).
       try {
         ticket = await repo.createTicket(draft);
-        if (!asDraft) await repo.submitTicket(ticket.id);
-      } catch (e) {
-        // If offline, save to queue
+      } on DioException catch (e) {
+        final isNetworkError = e.type == DioExceptionType.connectionError ||
+            e.type == DioExceptionType.connectionTimeout ||
+            e.type == DioExceptionType.receiveTimeout ||
+            e.type == DioExceptionType.sendTimeout ||
+            e.response == null;
+        if (!isNetworkError) rethrow; // surface validation errors to the officer
+
+        // Genuine network outage — save to queue and kick off an immediate
+        // sync attempt (will succeed silently once connectivity returns).
         await AppStorage.instance.addToOfflineQueue(draft.toOfflineJson());
-        ref.invalidate(offlineQueueProvider);
+        ref.read(offlineQueueProvider.notifier).state =
+            AppStorage.instance.getOfflineQueue();
+        // Attempt sync right away — resolves cases where the outage was brief
+        AutoSyncService.instance.triggerSync();
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Saved offline. Will sync when connected.')));
+            const SnackBar(
+              content: Text('No connection — saved locally. Will upload automatically when online.'),
+              duration: Duration(seconds: 3),
+            ));
           context.pop();
         }
         return;
       }
+
+      // Ticket created on backend — now optionally submit it
+      if (!asDraft) {
+        try {
+          await repo.submitTicket(ticket.id);
+        } catch (_) {
+          // Ticket exists as DRAFT on server — navigate there so officer can submit manually
+        }
+      }
+
       ref.invalidate(ticketsListProvider);
+      ref.invalidate(dashboardSummaryProvider);
       ref.read(ticketDraftProvider.notifier).state = TicketDraft();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

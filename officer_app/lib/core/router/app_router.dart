@@ -18,6 +18,7 @@ import '../../features/tickets/presentation/new_ticket_screen.dart';
 import '../../features/tickets/presentation/sync_screen.dart';
 import '../../features/tickets/presentation/ticket_detail_screen.dart';
 import '../../features/tickets/presentation/tickets_list_screen.dart';
+import '../../features/violations/violation_search_screen.dart';
 
 // Wrapper so main.dart can hold the router instance stably
 class GoRouterConfig {
@@ -147,13 +148,14 @@ class AppRouter {
         ),
 
         // Full-screen flows (no bottom nav)
-        GoRoute(path: '/new-ticket',    builder: (_, __) => const NewTicketScreen()),
-        GoRoute(path: '/tickets/:id',   builder: (_, state) => TicketDetailScreen(id: state.pathParameters['id']!)),
-        GoRoute(path: '/sync',          builder: (_, __) => const SyncScreen()),
-        GoRoute(path: '/supervisor',    builder: (_, __) => const SupervisorScreen()),
-        GoRoute(path: '/performance',   builder: (_, __) => const PerformanceScreen()),
-        GoRoute(path: '/notifications', builder: (_, __) => const NotificationsScreen()),
-        GoRoute(path: '/settings',      builder: (_, __) => const SettingsScreen()),
+        GoRoute(path: '/new-ticket',        builder: (_, __) => const NewTicketScreen()),
+        GoRoute(path: '/tickets/:id',       builder: (_, state) => TicketDetailScreen(id: state.pathParameters['id']!)),
+        GoRoute(path: '/sync',              builder: (_, __) => const SyncScreen()),
+        GoRoute(path: '/supervisor',        builder: (_, __) => const SupervisorScreen()),
+        GoRoute(path: '/performance',       builder: (_, __) => const PerformanceScreen()),
+        GoRoute(path: '/notifications',     builder: (_, __) => const NotificationsScreen()),
+        GoRoute(path: '/settings',          builder: (_, __) => const SettingsScreen()),
+        GoRoute(path: '/search-violations', builder: (_, __) => const ViolationSearchScreen()),
       ],
       errorBuilder: (ctx, state) => Scaffold(
         appBar: AppBar(title: const Text('Not Found')),

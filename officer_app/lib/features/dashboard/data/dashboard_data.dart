@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/network/api_client.dart';
+import '../../../core/storage/app_storage.dart';
 
 class OfficerSummary {
   final int ticketsToday;
@@ -7,6 +8,8 @@ class OfficerSummary {
   final int pendingSubmissions;
   final int unsyncedCount;
   final int confirmedViolations;
+  final int submittedCount;
+  final int totalTickets;
   final List<AlertItem> alerts;
 
   const OfficerSummary({
@@ -15,15 +18,19 @@ class OfficerSummary {
     this.pendingSubmissions = 0,
     this.unsyncedCount = 0,
     this.confirmedViolations = 0,
+    this.submittedCount = 0,
+    this.totalTickets = 0,
     this.alerts = const [],
   });
 
-  factory OfficerSummary.fromJson(Map<String, dynamic> j) => OfficerSummary(
-        ticketsToday: j['tickets_today'] ?? j['total_violations_today'] ?? 0,
+  factory OfficerSummary.fromJson(Map<String, dynamic> j, {int offlineCount = 0}) => OfficerSummary(
+        ticketsToday: j['tickets_today'] ?? 0,
         ticketsWeek: j['tickets_week'] ?? 0,
         pendingSubmissions: j['pending_submissions'] ?? 0,
-        unsyncedCount: j['unsynced_count'] ?? 0,
-        confirmedViolations: j['confirmed_violations'] ?? 0,
+        unsyncedCount: offlineCount,
+        confirmedViolations: j['confirmed_count'] ?? 0,
+        submittedCount: j['submitted_count'] ?? 0,
+        totalTickets: j['total_tickets'] ?? 0,
         alerts: ((j['alerts'] as List?) ?? [])
             .whereType<Map<String, dynamic>>()
             .map(AlertItem.fromJson)
@@ -52,22 +59,15 @@ class DashboardRepository {
   final ApiClient _api;
 
   Future<OfficerSummary> getSummary() async {
-    // Officer-specific summary — falls back to admin if officer endpoint not separate
+    final offlineCount = AppStorage.instance.getOfflineQueue().length;
     try {
-      final res = await _api.get('/officer/tickets/', query: {'page_size': 1, 'date_from': _today()});
-      final todayCount = (res.data as Map<String, dynamic>?)?['count'] ?? 0;
-      final weekRes  = await _api.get('/officer/tickets/', query: {'page_size': 1, 'date_from': _weekAgo()});
-      final weekCount = (weekRes.data as Map<String, dynamic>?)?['count'] ?? 0;
-      final pendingRes = await _api.get('/officer/tickets/', query: {'page_size': 1, 'status': 'SUBMITTED'});
-      final pendingCount = (pendingRes.data as Map<String, dynamic>?)?['count'] ?? 0;
-      return OfficerSummary(ticketsToday: todayCount, ticketsWeek: weekCount, pendingSubmissions: pendingCount);
+      final res = await _api.get('/officer/dashboard/');
+      final data = res.data as Map<String, dynamic>? ?? {};
+      return OfficerSummary.fromJson(data, offlineCount: offlineCount);
     } catch (_) {
-      return const OfficerSummary();
+      return OfficerSummary(unsyncedCount: offlineCount);
     }
   }
-
-  String _today() => DateTime.now().toIso8601String().substring(0, 10);
-  String _weekAgo() => DateTime.now().subtract(const Duration(days: 7)).toIso8601String().substring(0, 10);
 }
 
 final dashboardRepositoryProvider = Provider<DashboardRepository>((ref) =>

@@ -7,6 +7,7 @@ import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import '../../shared/widgets/shared_widgets.dart';
 import '../auth/data/auth_providers.dart';
+import 'personal_info_screen.dart';
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
@@ -48,9 +49,9 @@ class ProfileScreen extends ConsumerWidget {
           const SizedBox(height: AppSpacing.lg),
 
           _Section('Account'),
-          _MenuTile(icon: Icons.person_outline,            label: 'Personal Information', onTap: () {}),
+          _MenuTile(icon: Icons.person_outline,            label: 'Personal Information', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PersonalInfoScreen()))),
           _MenuTile(icon: Icons.bar_chart_outlined,        label: 'My Performance',       onTap: () => context.push('/performance')),
-          _MenuTile(icon: Icons.receipt_long_outlined,     label: 'My Tickets',           onTap: () => context.push('/tickets')),
+          _MenuTile(icon: Icons.receipt_long_outlined,     label: 'Field Tickets',        onTap: () => context.push('/tickets')),
 
           if (user?.isSupervisor == true) ...[
             const SizedBox(height: AppSpacing.sm),

@@ -231,60 +231,126 @@ class _LifecycleTimeline extends StatelessWidget {
   const _LifecycleTimeline({required this.status});
   final String status;
 
+  // Backend statuses: DRAFT → SUBMITTED → CONFIRMED | DISMISSED | ESCALATED
   static const _steps = [
-    ('DRAFT', 'Draft', Icons.edit_outlined),
-    ('SUBMITTED', 'Submitted', Icons.send_outlined),
-    ('SYNCED', 'Synced', Icons.cloud_done_outlined),
-    ('UNDER_REVIEW', 'Under Review', Icons.find_in_page_outlined),
-    ('ACKNOWLEDGED', 'Acknowledged', Icons.check_outlined),
-    ('CLOSED', 'Closed', Icons.lock_outline),
+    ('DRAFT',      'Draft',       Icons.edit_outlined),
+    ('SUBMITTED',  'Submitted',   Icons.send_outlined),
+    ('CONFIRMED',  'Confirmed',   Icons.verified_outlined),
   ];
 
+  bool get _isDismissed  => status == 'DISMISSED';
+  bool get _isEscalated  => status == 'ESCALATED';
+
   int _currentIndex() {
-    for (int i = 0; i < _steps.length; i++) {
-      if (_steps[i].$1 == status) return i;
-    }
+    if (status == 'DRAFT')      return 0;
+    if (status == 'SUBMITTED')  return 1;
+    // CONFIRMED, DISMISSED, ESCALATED, CLOSED all map to the final visual step
+    if ({'CONFIRMED', 'DISMISSED', 'ESCALATED', 'CLOSED'}.contains(status)) return 2;
     return 0;
   }
 
   @override
   Widget build(BuildContext context) {
     final currentIdx = _currentIndex();
+
+    Color finalColor() {
+      if (_isDismissed) return AppColors.danger;
+      if (_isEscalated) return AppColors.warning;
+      return AppColors.success;
+    }
+
+    IconData finalIcon() {
+      if (_isDismissed) return Icons.cancel_outlined;
+      if (_isEscalated) return Icons.warning_amber_outlined;
+      return Icons.verified_outlined;
+    }
+
+    String finalLabel() {
+      if (_isDismissed) return 'Dismissed';
+      if (_isEscalated) return 'Escalated';
+      if (status == 'CLOSED') return 'Closed';
+      return 'Confirmed';
+    }
+
+    final steps = [
+      (_steps[0].$1, _steps[0].$2, _steps[0].$3, AppColors.success),
+      (_steps[1].$1, _steps[1].$2, _steps[1].$3, AppColors.primary),
+      ('FINAL', finalLabel(), finalIcon(), finalColor()),
+    ];
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Case Lifecycle', style: AppTypography.labelLarge),
+        Row(
+          children: [
+            Text('Case Lifecycle', style: AppTypography.labelLarge),
+            const Spacer(),
+            _StatusChip(status: status),
+          ],
+        ),
         const SizedBox(height: AppSpacing.sm),
         Row(
-          children: List.generate(_steps.length, (i) {
-            final done = i <= currentIdx;
+          children: List.generate(steps.length, (i) {
+            final done    = i <= currentIdx;
             final current = i == currentIdx;
+            final stepColor = done ? steps[i].$4 : AppColors.gray300;
             return Expanded(
               child: Column(
                 children: [
                   Row(children: [
-                    if (i > 0) Expanded(child: Container(height: 2, color: done ? AppColors.primary : AppColors.gray200)),
+                    if (i > 0) Expanded(child: Container(height: 2,
+                        color: i <= currentIdx ? AppColors.primary : AppColors.gray200)),
                     Container(
-                      width: 28, height: 28,
+                      width: 30, height: 30,
                       decoration: BoxDecoration(
-                        color: current ? AppColors.primary : done ? AppColors.success : AppColors.gray200,
+                        color: done ? stepColor : AppColors.gray200,
                         shape: BoxShape.circle,
+                        border: current ? Border.all(color: stepColor, width: 2) : null,
                       ),
-                      child: Icon(_steps[i].$3, size: 14, color: AppColors.white),
+                      child: Icon(steps[i].$3, size: 15, color: AppColors.white),
                     ),
-                    if (i < _steps.length - 1) Expanded(child: Container(height: 2, color: done && i < currentIdx ? AppColors.primary : AppColors.gray200)),
+                    if (i < steps.length - 1) Expanded(child: Container(height: 2,
+                        color: i < currentIdx ? AppColors.primary : AppColors.gray200)),
                   ]),
                   const SizedBox(height: 4),
-                  Text(_steps[i].$2, style: AppTypography.caption.copyWith(
-                      color: current ? AppColors.primary : done ? AppColors.success : AppColors.textTertiary,
-                      fontWeight: current ? FontWeight.w700 : FontWeight.w400),
-                      textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  Text(steps[i].$2,
+                      style: AppTypography.caption.copyWith(
+                          color: current ? stepColor : done ? stepColor.withValues(alpha: 0.8) : AppColors.textTertiary,
+                          fontWeight: current ? FontWeight.w700 : FontWeight.w400),
+                      textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis),
                 ],
               ),
             );
           }),
         ),
       ],
+    );
+  }
+}
+
+class _StatusChip extends StatelessWidget {
+  const _StatusChip({required this.status});
+  final String status;
+
+  @override
+  Widget build(BuildContext context) {
+    final (label, color) = switch (status) {
+      'DRAFT'      => ('Draft',       AppColors.gray500),
+      'SUBMITTED'  => ('Under Review', AppColors.primary),
+      'CONFIRMED'  => ('Confirmed',    AppColors.success),
+      'DISMISSED'  => ('Dismissed',    AppColors.danger),
+      'ESCALATED'  => ('Escalated',    AppColors.warning),
+      'CLOSED'     => ('Closed',       AppColors.gray600),
+      _            => (status,         AppColors.gray500),
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
+      ),
+      child: Text(label, style: AppTypography.caption.copyWith(color: color, fontWeight: FontWeight.w700)),
     );
   }
 }
