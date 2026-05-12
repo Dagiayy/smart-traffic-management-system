@@ -46,7 +46,90 @@ class PerformanceScreen extends ConsumerWidget {
         data: (data) => ListView(
           padding: const EdgeInsets.all(AppSpacing.screenPadding),
           children: [
-            // Top stats
+            // ── Rank & Progress Card ──────────────────────────────────────
+            AppCard(
+              elevated: true,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(children: [
+                    const Icon(Icons.emoji_events_outlined,
+                        color: Color(0xFFD97706), size: 22),
+                    const SizedBox(width: 8),
+                    Text('Rank & Progress', style: AppTypography.h3),
+                  ]),
+                  const SizedBox(height: AppSpacing.md),
+
+                  // Rank
+                  if (data['rank'] != null)
+                    Row(children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFEF3C7),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: const Color(0xFFD97706)),
+                        ),
+                        child: Text(
+                          '#${data['rank']} This Month',
+                          style: AppTypography.labelMedium
+                              .copyWith(color: const Color(0xFF92400E)),
+                        ),
+                      ),
+                    ]),
+                  const SizedBox(height: AppSpacing.sm),
+
+                  // Monthly progress bar
+                  Row(children: [
+                    const Icon(Icons.flag_outlined,
+                        size: 16, color: AppColors.textSecondary),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        '${data['month_progress'] ?? 0} / ${data['monthly_target'] ?? 20} tickets this month',
+                        style: AppTypography.bodySmall,
+                      ),
+                    ),
+                    Text(
+                      '${(((data['month_progress'] ?? 0) as num) / ((data['monthly_target'] ?? 20) as num) * 100).clamp(0, 100).round()}%',
+                      style: AppTypography.labelSmall
+                          .copyWith(color: AppColors.primary),
+                    ),
+                  ]),
+                  const SizedBox(height: 6),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: LinearProgressIndicator(
+                      value: (((data['month_progress'] ?? 0) as num) /
+                              ((data['monthly_target'] ?? 20) as num))
+                          .clamp(0.0, 1.0)
+                          .toDouble(),
+                      backgroundColor: AppColors.gray100,
+                      valueColor:
+                          const AlwaysStoppedAnimation(AppColors.primary),
+                      minHeight: 8,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+
+                  // Streak
+                  Row(children: [
+                    const Text('🔥',
+                        style: TextStyle(fontSize: 16)),
+                    const SizedBox(width: 6),
+                    Text(
+                      '${data['streak'] ?? 0} day streak',
+                      style: AppTypography.labelMedium
+                          .copyWith(color: AppColors.warning),
+                    ),
+                  ]),
+                ],
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+
+            // ── Top stat cards ─────────────────────────────────────────────
             Row(children: [
               _StatCard('Today',  '${data['tickets_today'] ?? 0}',  Icons.today_outlined,      AppColors.primary),
               const SizedBox(width: AppSpacing.sm),
@@ -140,6 +223,33 @@ class PerformanceScreen extends ConsumerWidget {
                 ],
               ),
             ),
+            const SizedBox(height: AppSpacing.md),
+
+            // Top Violation Type
+            if (data['top_violation'] != null)
+              AppCard(
+                elevated: true,
+                child: Row(children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                        color: AppColors.primary.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(8)),
+                    child: const Icon(Icons.gavel_outlined,
+                        color: AppColors.primary, size: 20),
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Most Issued Violation', style: AppTypography.labelMedium),
+                      Text('${data['top_violation']}',
+                          style: AppTypography.bodySmall,
+                          overflow: TextOverflow.ellipsis),
+                    ],
+                  )),
+                ]),
+              ),
           ],
         ),
       ),

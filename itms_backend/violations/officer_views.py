@@ -418,9 +418,12 @@ class OfficerPerformanceView(APIView):
     permission_classes = [IsOfficerOrAbove]
 
     def get(self, request):
+        from django.db.models import Count as DCount
+        from django.contrib.auth import get_user_model
         officer = request.user
         today    = timezone.now().date()
         week_ago = today - timedelta(days=7)
+        month_start = today.replace(day=1)
 
         base = Violation.objects.filter(officer=officer, source='OFFICER_FIELD')
         today_qs = base.filter(detected_at__date=today)
@@ -441,6 +444,36 @@ class OfficerPerformanceView(APIView):
             d = today - timedelta(days=i)
             weekly.append(base.filter(detected_at__date=d).count())
 
+        # Rank among officers this month by confirmed tickets
+        officer_rankings = (
+            Violation.objects.filter(source='OFFICER_FIELD', detected_at__date__gte=month_start, status='CONFIRMED')
+            .values('officer')
+            .annotate(cnt=DCount('id'))
+            .order_by('-cnt')
+        )
+        rank = next((i + 1 for i, r in enumerate(officer_rankings) if str(r['officer']) == str(officer.id)), None)
+        if rank is None:
+            month_confirmed = base.filter(detected_at__date__gte=month_start, status='CONFIRMED').count()
+            rank = officer_rankings.count() + 1 if month_confirmed == 0 else officer_rankings.count()
+
+        # Monthly progress (all statuses)
+        month_progress = base.filter(detected_at__date__gte=month_start).count()
+        monthly_target = 20
+
+        # Streak: consecutive days with at least 1 ticket going back from today
+        streak = 0
+        check_day = today
+        while True:
+            if base.filter(detected_at__date=check_day).exists():
+                streak += 1
+                check_day -= timedelta(days=1)
+            else:
+                break
+
+        # Top violation type
+        top_viol_qs = (base.values('violation_type__name').annotate(cnt=DCount('id')).order_by('-cnt').first())
+        top_violation = top_viol_qs['violation_type__name'] if top_viol_qs else None
+
         return Response({
             'tickets_today': tickets_today,
             'tickets_week': tickets_week,
@@ -450,6 +483,11 @@ class OfficerPerformanceView(APIView):
             'confirmed': confirmed,
             'accuracy_pct': accuracy_pct,
             'weekly': weekly,
+            'rank': rank,
+            'monthly_target': monthly_target,
+            'month_progress': month_progress,
+            'streak': streak,
+            'top_violation': top_violation,
         })
 
 
@@ -499,7 +537,13 @@ class OfficerUpdateProfileView(APIView):
 
     def get(self, request):
         from accounts.serializers import UserSerializer
-        return Response(UserSerializer(request.user).data)
+        data = UserSerializer(request.user).data
+        try:
+            profile = request.user.profile
+            data['notification_preferences'] = profile.notification_preferences or {}
+        except Exception:
+            data['notification_preferences'] = {}
+        return Response(data)
 
     def patch(self, request):
         user = request.user
@@ -524,8 +568,47 @@ class OfficerUpdateProfileView(APIView):
             user.set_password(new_pw)
             user.save()
 
+        # Update notification preferences if provided
+        notif_prefs = request.data.get('notification_preferences')
+        if notif_prefs and isinstance(notif_prefs, dict):
+            from accounts.models import UserProfile
+            profile, _ = UserProfile.objects.get_or_create(user=user)
+            profile.notification_preferences = notif_prefs
+            profile.save(update_fields=['notification_preferences'])
+
         from accounts.serializers import UserSerializer
-        return Response(UserSerializer(user).data)
+        data = UserSerializer(user).data
+        try:
+            profile = user.profile
+            data['notification_preferences'] = profile.notification_preferences or {}
+        except Exception:
+            data['notification_preferences'] = {}
+        return Response(data)
+
+
+class OfficerProfileEditRequestView(APIView):
+    """Officer submits a request to edit their profile fields (admin-approved)."""
+    permission_classes = [IsOfficerOrAbove]
+
+    def post(self, request):
+        from accounts.models import ProfileEditRequest
+        field_name = request.data.get('field_name', '').strip()
+        requested_value = request.data.get('requested_value', '').strip()
+        reason = request.data.get('reason', '').strip()
+        if not field_name or not requested_value or not reason:
+            return Response({'error': 'field_name, requested_value, and reason are required.'}, status=400)
+        allowed_fields = {'full_name', 'email', 'phone_number'}
+        if field_name not in allowed_fields:
+            return Response({'error': f'field_name must be one of: {", ".join(allowed_fields)}'}, status=400)
+        current_value = getattr(request.user, field_name, '') or ''
+        ProfileEditRequest.objects.create(
+            officer=request.user,
+            field_name=field_name,
+            current_value=str(current_value),
+            requested_value=requested_value,
+            reason=reason,
+        )
+        return Response({'message': 'Edit request submitted successfully.'}, status=201)
 
 
 # ── Supervisor Views ──────────────────────────────────────────────────────

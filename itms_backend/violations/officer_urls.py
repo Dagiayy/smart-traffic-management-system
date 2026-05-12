@@ -5,6 +5,7 @@ from .officer_views import (
     OfficerDashboardView, OfficerAnalyticsView,
     OfficerDailyReportView, OfficerPerformanceView,
     OfficerSearchViolationsView, OfficerUpdateProfileView,
+    OfficerProfileEditRequestView,
 )
 
 urlpatterns = [
@@ -20,4 +21,5 @@ urlpatterns = [
     path('performance/',                OfficerPerformanceView.as_view()),
     path('search/violations/',          OfficerSearchViolationsView.as_view()),
     path('profile/',                    OfficerUpdateProfileView.as_view()),
+    path('profile/edit-request/',       OfficerProfileEditRequestView.as_view()),
 ]

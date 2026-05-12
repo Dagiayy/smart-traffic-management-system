@@ -1,6 +1,8 @@
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/services/auto_sync_service.dart';
 import '../../../core/storage/app_storage.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -15,20 +17,41 @@ class SyncScreen extends ConsumerStatefulWidget {
 }
 
 class _SyncScreenState extends ConsumerState<SyncScreen> {
-  bool _syncing = false;
-  Map<String, String> _results = {};
+  bool _retrying = false;
+  List<ConnectivityResult> _connectivity = [ConnectivityResult.none];
 
-  Future<void> _syncAll() async {
+  @override
+  void initState() {
+    super.initState();
+    _checkConnectivity();
+  }
+
+  Future<void> _checkConnectivity() async {
+    final results = await Connectivity().checkConnectivity();
+    if (mounted) setState(() => _connectivity = results);
+  }
+
+  bool get _isConnected =>
+      _connectivity.any((r) => r != ConnectivityResult.none);
+
+  String get _connectivityLabel {
+    if (_connectivity.contains(ConnectivityResult.wifi)) return 'Wi-Fi';
+    if (_connectivity.contains(ConnectivityResult.mobile)) return 'Mobile Data';
+    if (_connectivity.contains(ConnectivityResult.ethernet)) return 'Ethernet';
+    return 'Offline';
+  }
+
+  Future<void> _retrySync() async {
     final queue = ref.read(offlineQueueProvider);
     if (queue.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Nothing to sync')));
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Nothing to sync')));
       return;
     }
-    setState(() { _syncing = true; _results = {}; });
+    setState(() => _retrying = true);
     try {
       final repo = ref.read(ticketsRepositoryProvider);
       final result = await repo.bulkSync(queue);
-      debugPrint('Bulk sync result: $result'); // Add this line for debugging
       final synced = (result['synced'] as List? ?? [])
           .where((e) => e != null)
           .map((e) => e.toString())
@@ -37,48 +60,120 @@ class _SyncScreenState extends ConsumerState<SyncScreen> {
           .where((e) => e != null)
           .map((e) => e.toString())
           .toList();
-      // Remove synced items from local storage
-      for (final id in synced) { await AppStorage.instance.removeFromOfflineQueue(id); }
-      // Force state update from storage (StateProvider needs explicit state set)
-      ref.read(offlineQueueProvider.notifier).state = AppStorage.instance.getOfflineQueue();
+      for (final id in synced) {
+        await AppStorage.instance.removeFromOfflineQueue(id);
+      }
+      await AppStorage.instance
+          .setLastSyncTime(DateTime.now().toIso8601String());
+      ref.read(offlineQueueProvider.notifier).state =
+          AppStorage.instance.getOfflineQueue();
       ref.invalidate(ticketsListProvider);
-      setState(() {
-        _results = {for (var id in synced) id: 'synced', for (var id in failed) id: 'failed'};
-      });
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${synced.length} synced, ${failed.length} failed')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('${synced.length} synced, ${failed.length} failed')));
+      }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Sync failed: $e')));
-    } finally { if (mounted) setState(() => _syncing = false); }
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Sync failed: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _retrying = false);
+    }
+  }
+
+  String? _lastSyncFormatted() {
+    final raw = AppStorage.instance.getLastSyncTime();
+    if (raw == null) return null;
+    final dt = DateTime.tryParse(raw);
+    if (dt == null) return null;
+    final now = DateTime.now();
+    final diff = now.difference(dt);
+    if (diff.inMinutes < 1) return 'just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    return '${diff.inDays}d ago';
   }
 
   @override
   Widget build(BuildContext context) {
     final queue = ref.watch(offlineQueueProvider);
+    final lastSync = _lastSyncFormatted();
+
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(title: const Text('Sync Manager')),
+      appBar: AppBar(title: const Text('Sync Status')),
       body: ListView(
         padding: const EdgeInsets.all(AppSpacing.screenPadding),
         children: [
-          // Status card
+          // Auto-sync status card
           AppCard(
             elevated: true,
-            color: queue.isEmpty ? AppColors.successSurface : AppColors.warningSurface,
+            color: AppColors.primarySurface,
             child: Row(
               children: [
-                Icon(queue.isEmpty ? Icons.cloud_done_outlined : Icons.cloud_upload_outlined,
-                    color: queue.isEmpty ? AppColors.success : AppColors.warning, size: 28),
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: const BoxDecoration(
+                      color: AppColors.primary, shape: BoxShape.circle),
+                  child: const Icon(Icons.sync_outlined,
+                      color: AppColors.white, size: 20),
+                ),
                 const SizedBox(width: AppSpacing.md),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(queue.isEmpty ? 'All Synced' : '${queue.length} Pending',
+                      Text('Auto-sync is active',
+                          style: AppTypography.labelLarge
+                              .copyWith(color: AppColors.primary)),
+                      Text(
+                        'Connectivity: $_connectivityLabel'
+                        '${lastSync != null ? '  •  Last sync: $lastSync' : ''}',
+                        style: AppTypography.bodySmall,
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(
+                  _isConnected ? Icons.wifi : Icons.wifi_off,
+                  color: _isConnected ? AppColors.success : AppColors.danger,
+                  size: 20,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+
+          // Queue count card
+          AppCard(
+            elevated: true,
+            color: queue.isEmpty ? AppColors.successSurface : AppColors.warningSurface,
+            child: Row(
+              children: [
+                Icon(
+                    queue.isEmpty
+                        ? Icons.cloud_done_outlined
+                        : Icons.cloud_upload_outlined,
+                    color: queue.isEmpty ? AppColors.success : AppColors.warning,
+                    size: 28),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                          queue.isEmpty
+                              ? 'All Synced'
+                              : '${queue.length} Pending',
                           style: AppTypography.h3.copyWith(
-                              color: queue.isEmpty ? AppColors.success : AppColors.warning)),
-                      Text(queue.isEmpty ? 'No offline records pending upload.'
-                          : 'These records were created offline and need to be uploaded.',
+                              color: queue.isEmpty
+                                  ? AppColors.success
+                                  : AppColors.warning)),
+                      Text(
+                          queue.isEmpty
+                              ? 'No offline records pending upload.'
+                              : 'Records waiting to be uploaded to the central system.',
                           style: AppTypography.bodySmall),
                     ],
                   ),
@@ -86,58 +181,61 @@ class _SyncScreenState extends ConsumerState<SyncScreen> {
               ],
             ),
           ),
+
           if (queue.isNotEmpty) ...[
-            const SizedBox(height: AppSpacing.lg),
+            const SizedBox(height: AppSpacing.md),
             AppButton(
-              label: 'Sync All Records',
+              label: 'Retry Sync Now',
               icon: Icons.sync_outlined,
-              loading: _syncing,
-              onPressed: _syncing ? null : _syncAll,
+              variant: AppButtonVariant.secondary,
+              loading: _retrying,
+              onPressed: _retrying ? null : _retrySync,
             ),
             const SizedBox(height: AppSpacing.lg),
             const SectionHeader('PENDING RECORDS'),
             const SizedBox(height: AppSpacing.sm),
-            ...queue.map((t) {
-              final lid = t['local_id']?.toString() ?? '';
-              final result = _results[lid];
-              return Padding(
-                padding: const EdgeInsets.only(bottom: AppSpacing.xs),
-                child: AppCard(
-                  child: Row(children: [
-                    Container(
-                      width: 40, height: 40,
-                      decoration: BoxDecoration(
-                        color: result == 'synced' ? AppColors.successSurface
-                            : result == 'failed' ? AppColors.dangerSurface
-                            : AppColors.warningSurface,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Icon(
-                        result == 'synced' ? Icons.check_circle_outline
-                            : result == 'failed' ? Icons.error_outline
-                            : Icons.hourglass_top_outlined,
-                        size: 18,
-                        color: result == 'synced' ? AppColors.success
-                            : result == 'failed' ? AppColors.danger
-                            : AppColors.warning,
-                      ),
+            ...queue.map((t) => Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+              child: AppCard(
+                child: Row(children: [
+                  Container(
+                    width: 40, height: 40,
+                    decoration: BoxDecoration(
+                      color: AppColors.warningSurface,
+                      borderRadius: BorderRadius.circular(10),
                     ),
-                    const SizedBox(width: AppSpacing.sm),
-                    Expanded(
-                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Text(t['plate_number']?.toString() ?? 'Ticket', style: AppTypography.labelLarge),
-                        Text(t['created_at']?.toString().substring(0, 10) ?? 'Offline', style: AppTypography.bodySmall),
-                      ]),
-                    ),
-                    SyncBadge(status: result == 'synced' ? 'SYNCED' : result == 'failed' ? 'FAILED' : 'PENDING_SYNC'),
-                  ]),
-                ),
-              );
-            }),
+                    child: const Icon(Icons.hourglass_top_outlined,
+                        size: 18, color: AppColors.warning),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                      Text(t['plate_number']?.toString() ?? 'Ticket',
+                          style: AppTypography.labelLarge),
+                      Text(
+                          t['created_at']?.toString().length != null &&
+                                  (t['created_at']?.toString().length ?? 0) >=
+                                      10
+                              ? t['created_at'].toString().substring(0, 10)
+                              : 'Offline',
+                          style: AppTypography.bodySmall),
+                    ]),
+                  ),
+                  const SyncBadge(status: 'PENDING_SYNC'),
+                ]),
+              ),
+            )),
           ],
+
           if (queue.isEmpty)
-            const EmptyState(icon: Icons.cloud_done_outlined, title: 'All Synced',
-                message: 'All offline records have been uploaded to the central system.'),
+            const EmptyState(
+              icon: Icons.cloud_done_outlined,
+              title: 'All records synced',
+              message:
+                  'All offline records have been uploaded to the central system.',
+            ),
         ],
       ),
     );

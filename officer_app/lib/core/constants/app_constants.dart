@@ -18,6 +18,18 @@ class AppConstants {
   static const String kViolationTypesCache = 'violation_types_cache';
   static const String kIntersectionsCache = 'intersections_cache';
 
+  // Settings keys
+  static const String kLanguage = 'settings_language';
+  static const String kAutoSync = 'settings_auto_sync';
+  static const String kBiometric = 'settings_biometric';
+  static const String kAutoLock = 'settings_auto_lock';
+  static const String kNotifSync = 'settings_notif_sync';
+  static const String kNotifSupervisor = 'settings_notif_supervisor';
+  static const String kNotifSystem = 'settings_notif_system';
+  static const String kNotifPolicy = 'settings_notif_policy';
+  static const String kNotifHighPriority = 'settings_notif_high_priority';
+  static const String kLastSyncTime = 'last_sync_time';
+
   // App info
   static const String appName = 'Traffic Police Field Enforcement';
   static const String appTagline = 'Smart Enforcement. Faster Operations. Safer Roads.';

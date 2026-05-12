@@ -51,7 +51,7 @@ class ProfileScreen extends ConsumerWidget {
           _Section('Account'),
           _MenuTile(icon: Icons.person_outline,            label: 'Personal Information', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PersonalInfoScreen()))),
           _MenuTile(icon: Icons.bar_chart_outlined,        label: 'My Performance',       onTap: () => context.push('/performance')),
-          _MenuTile(icon: Icons.receipt_long_outlined,     label: 'My Tickets',           onTap: () => context.push('/tickets')),
+          _MenuTile(icon: Icons.receipt_long_outlined,     label: 'Field Tickets',        onTap: () => context.push('/tickets')),
 
           if (user?.isSupervisor == true) ...[
             const SizedBox(height: AppSpacing.sm),

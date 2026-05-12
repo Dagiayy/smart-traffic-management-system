@@ -146,6 +146,39 @@ class _OverviewTab extends ConsumerWidget {
                   ],
                 ),
               ),
+              const SizedBox(height: AppSpacing.md),
+
+              // Top Violation row
+              if ((data['by_type'] as List? ?? []).isNotEmpty) ...[
+                AppCard(
+                  elevated: true,
+                  child: Row(children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(8)),
+                      child: const Icon(Icons.emoji_events_outlined,
+                          color: AppColors.primary, size: 20),
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text('Top Violation', style: AppTypography.labelMedium),
+                        Text(
+                          (data['by_type'] as List).first['name']?.toString() ?? '',
+                          style: AppTypography.bodySmall,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ]),
+                    ),
+                    Text(
+                      '${(data['by_type'] as List).first['count'] ?? 0}',
+                      style: AppTypography.numeric(18, FontWeight.w700, color: AppColors.primary),
+                    ),
+                  ]),
+                ),
+              ],
             ],
           ),
         ),
@@ -191,10 +224,10 @@ class _OverviewStats extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final stats = [
-      ('My Violations', '${data['total'] ?? 0}',     Icons.receipt_long_outlined,  AppColors.primary),
-      ('Confirmed',     '${data['confirmed'] ?? 0}', Icons.check_circle_outline,   AppColors.success),
-      ('Critical',      '${data['critical'] ?? 0}',  Icons.warning_amber_outlined, AppColors.danger),
-      ('Dismissed',     '${data['dismissed'] ?? 0}', Icons.cancel_outlined,        AppColors.gray500),
+      ('Issued Tickets', '${data['total'] ?? 0}',     Icons.receipt_long_outlined,  AppColors.primary),
+      ('Confirmed',      '${data['confirmed'] ?? 0}', Icons.check_circle_outline,   AppColors.success),
+      ('Critical',       '${data['critical'] ?? 0}',  Icons.warning_amber_outlined, AppColors.danger),
+      ('Dismissed',      '${data['dismissed'] ?? 0}', Icons.cancel_outlined,        AppColors.gray500),
     ];
     return GridView.count(
       crossAxisCount: 2, crossAxisSpacing: AppSpacing.sm, mainAxisSpacing: AppSpacing.sm,
@@ -223,6 +256,8 @@ class _ViolationsTab extends ConsumerWidget {
   const _ViolationsTab();
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Watch period so changing it in Overview also refreshes this tab
+    ref.watch(reportPeriodProvider);
     final async = ref.watch(officerAnalyticsProvider);
     return async.when(
       loading: () => const Padding(
@@ -239,7 +274,7 @@ class _ViolationsTab extends ConsumerWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('My Violations by Type', style: AppTypography.h3),
+                  Text('Violations by Type', style: AppTypography.h3),
                   const SizedBox(height: AppSpacing.md),
                   if (byType.isEmpty)
                     const Padding(
@@ -353,7 +388,7 @@ class _DailyTab extends ConsumerWidget {
               const Icon(Icons.today_outlined, color: AppColors.white, size: 22),
               const SizedBox(width: AppSpacing.sm),
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('My Daily Report', style: AppTypography.h3.copyWith(color: AppColors.white)),
+                Text("Today's Report", style: AppTypography.h3.copyWith(color: AppColors.white)),
                 Text(AppFormat.date(DateTime.now()),
                     style: AppTypography.bodySmall.copyWith(color: AppColors.white.withValues(alpha: 0.8))),
               ]),
@@ -366,6 +401,8 @@ class _DailyTab extends ConsumerWidget {
             ('Confirmed',         Icons.check_circle_outline,     report['confirmed']       ?? 0, AppColors.success),
             ('Dismissed',         Icons.cancel_outlined,          report['dismissed']       ?? 0, AppColors.gray500),
             ('Escalated Cases',   Icons.warning_amber_outlined,   report['escalated']       ?? 0, AppColors.danger),
+            if ((report['sync_failures'] ?? 0) > 0)
+              ('Sync Failures',   Icons.sync_problem_outlined,    report['sync_failures']   ?? 0, AppColors.warning),
           ].map((s) => Padding(
             padding: const EdgeInsets.only(bottom: AppSpacing.xs),
             child: AppCard(
