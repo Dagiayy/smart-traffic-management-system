@@ -230,12 +230,12 @@ class _QuickActions extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final actions = [
-      (Icons.add_circle_outline, 'New Ticket',    '/new-ticket',       AppColors.primary),
-      (Icons.list_alt_outlined,  'My Cases',      '/tickets',          AppColors.accent),
-      (Icons.map_outlined,       'Map View',      '/map',              AppColors.success),
-      (Icons.sync_outlined,      'Sync Records',  '/sync',             AppColors.warning),
-      (Icons.bar_chart_outlined, 'Reports',       '/reports',          AppColors.gray600),
-      (Icons.person_outline,     'My Activity',   '/performance',      AppColors.gray600),
+      (Icons.add_circle_outline,   'New Ticket',    '/new-ticket',         AppColors.primary),
+      (Icons.list_alt_outlined,    'My Cases',      '/tickets',            AppColors.accent),
+      (Icons.search_outlined,      'Search',        '/search-violations',  AppColors.info),
+      (Icons.sync_outlined,        'Sync Records',  '/sync',               AppColors.warning),
+      (Icons.bar_chart_outlined,   'Reports',       '/reports',            AppColors.gray600),
+      (Icons.person_outline,       'My Activity',   '/performance',        AppColors.gray600),
     ];
     return GridView.count(
       crossAxisCount: 3,

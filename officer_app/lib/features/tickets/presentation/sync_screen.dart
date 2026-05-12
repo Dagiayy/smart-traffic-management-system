@@ -29,11 +29,18 @@ class _SyncScreenState extends ConsumerState<SyncScreen> {
       final repo = ref.read(ticketsRepositoryProvider);
       final result = await repo.bulkSync(queue);
       debugPrint('Bulk sync result: $result'); // Add this line for debugging
-      final synced = (result['synced'] as List? ?? []).map((e) => e.toString()).toList();
-      final failed = (result['failed'] as List? ?? []).map((e) => e.toString()).toList();
-      // Remove synced from queue
+      final synced = (result['synced'] as List? ?? [])
+          .where((e) => e != null)
+          .map((e) => e.toString())
+          .toList();
+      final failed = (result['failed'] as List? ?? [])
+          .where((e) => e != null)
+          .map((e) => e.toString())
+          .toList();
+      // Remove synced items from local storage
       for (final id in synced) { await AppStorage.instance.removeFromOfflineQueue(id); }
-      ref.invalidate(offlineQueueProvider);
+      // Force state update from storage (StateProvider needs explicit state set)
+      ref.read(offlineQueueProvider.notifier).state = AppStorage.instance.getOfflineQueue();
       ref.invalidate(ticketsListProvider);
       setState(() {
         _results = {for (var id in synced) id: 'synced', for (var id in failed) id: 'failed'};
