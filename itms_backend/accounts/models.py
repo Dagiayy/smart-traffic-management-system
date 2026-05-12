@@ -77,6 +77,8 @@ class UserProfile(models.Model):
         related_name='supervised_officers', limit_choices_to={'role': 'SUPERVISOR'}
     )
 
+    notification_preferences = models.JSONField(default=dict, blank=True)
+
     class Meta:
         db_table = 'accounts_user_profile'
 
@@ -151,6 +153,27 @@ class OTPVerification(models.Model):
         """Generate a 6-digit OTP code."""
         import random
         return str(random.randint(100000, 999999))
+
+
+class ProfileEditRequest(models.Model):
+    STATUS_CHOICES = [('PENDING', 'Pending'), ('APPROVED', 'Approved'), ('REJECTED', 'Rejected')]
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    officer = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='edit_requests')
+    field_name = models.CharField(max_length=50)
+    current_value = models.CharField(max_length=255, blank=True)
+    requested_value = models.CharField(max_length=255)
+    reason = models.TextField()
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
+    admin_notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'accounts_profile_edit_request'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'EditRequest: {self.officer.full_name} -> {self.field_name}'
 
 
 class PushToken(models.Model):

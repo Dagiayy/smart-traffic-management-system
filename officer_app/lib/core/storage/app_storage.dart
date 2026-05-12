@@ -82,6 +82,25 @@ class AppStorage {
   String? getIntersections() =>
       _prefs?.getString(AppConstants.kIntersectionsCache);
 
+  // ── Settings ──────────────────────────────────────────────────────────────
+  String getLanguage() => _prefs?.getString(AppConstants.kLanguage) ?? 'English';
+  Future<void> setLanguage(String v) async => _prefs?.setString(AppConstants.kLanguage, v);
+
+  bool getAutoSync() => _prefs?.getBool(AppConstants.kAutoSync) ?? true;
+  Future<void> setAutoSync(bool v) async => _prefs?.setBool(AppConstants.kAutoSync, v);
+
+  bool getBiometric() => _prefs?.getBool(AppConstants.kBiometric) ?? false;
+  Future<void> setBiometric(bool v) async => _prefs?.setBool(AppConstants.kBiometric, v);
+
+  bool getAutoLock() => _prefs?.getBool(AppConstants.kAutoLock) ?? true;
+  Future<void> setAutoLock(bool v) async => _prefs?.setBool(AppConstants.kAutoLock, v);
+
+  bool getNotif(String key) => _prefs?.getBool(key) ?? true;
+  Future<void> setNotif(String key, bool v) async => _prefs?.setBool(key, v);
+
+  String? getLastSyncTime() => _prefs?.getString(AppConstants.kLastSyncTime);
+  Future<void> setLastSyncTime(String v) async => _prefs?.setString(AppConstants.kLastSyncTime, v);
+
   Future<void> clearAll() async {
     await _secure.deleteAll();
     await _prefs?.clear();
