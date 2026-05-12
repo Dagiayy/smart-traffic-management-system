@@ -7,6 +7,7 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/utils/app_format.dart';
 import '../../../shared/widgets/shared_widgets.dart';
+import '../../dashboard/data/dashboard_data.dart';
 import '../../tickets/data/ticket_data.dart';
 
 class TicketDetailScreen extends ConsumerWidget {
@@ -29,19 +30,25 @@ class TicketDetailScreen extends ConsumerWidget {
           ]),
         ),
         error: (e, _) => ErrorRetry(message: e.toString(), onRetry: () => ref.invalidate(ticketDetailProvider(id))),
-        data: (t) => _DetailBody(ticket: t, ref: ref),
+        data: (t) => _DetailBody(ticket: t),
       ),
     );
   }
 }
 
-class _DetailBody extends StatelessWidget {
-  const _DetailBody({required this.ticket, required this.ref});
+class _DetailBody extends ConsumerStatefulWidget {
+  const _DetailBody({required this.ticket});
   final FieldTicket ticket;
-  final WidgetRef ref;
+  @override
+  ConsumerState<_DetailBody> createState() => _DetailBodyState();
+}
+
+class _DetailBodyState extends ConsumerState<_DetailBody> {
+  bool _submitting = false;
 
   @override
   Widget build(BuildContext context) {
+    final ticket = widget.ticket;
     final canSubmit = ticket.status == 'DRAFT';
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.screenPadding),
@@ -171,7 +178,8 @@ class _DetailBody extends StatelessWidget {
             label: 'Submit for Review',
             icon: Icons.send_outlined,
             variant: AppButtonVariant.success,
-            onPressed: () => _submit(context, ref),
+            loading: _submitting,
+            onPressed: _submitting ? null : () => _submit(context),
           ),
         if (canSubmit) const SizedBox(height: AppSpacing.sm),
         AppButton(
@@ -185,7 +193,8 @@ class _DetailBody extends StatelessWidget {
     );
   }
 
-  Future<void> _submit(BuildContext context, WidgetRef ref) async {
+  Future<void> _submit(BuildContext context) async {
+    final ticket = widget.ticket;
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -197,14 +206,20 @@ class _DetailBody extends StatelessWidget {
         ],
       ),
     );
-    if (confirm != true || !context.mounted) return;
+    if (confirm != true || !mounted) return;
+    setState(() => _submitting = true);
     try {
       await ref.read(ticketsRepositoryProvider).submitTicket(ticket.id);
       ref.invalidate(ticketDetailProvider(ticket.id));
       ref.invalidate(ticketsListProvider);
-      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Ticket submitted for review')));
+      ref.invalidate(dashboardSummaryProvider);
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Ticket submitted for review')));
     } catch (e) {
-      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Submit failed: $e'), backgroundColor: Colors.red[700]));
+    } finally {
+      if (mounted) setState(() => _submitting = false);
     }
   }
 }

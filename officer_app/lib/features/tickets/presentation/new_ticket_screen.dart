@@ -128,7 +128,16 @@ class _NewTicketScreenState extends ConsumerState<NewTicketScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(asDraft ? 'Saved as draft' : 'Ticket submitted successfully')));
-        context.go('/tickets/${ticket.id}');
+        context.go('/tickets/${ticket!.id}');
+      }
+    } catch (e) {
+      // Show server/validation errors to the officer
+      if (mounted) {
+        final msg = e is DioException
+            ? (e.response?.data?['error'] ?? e.response?.data?['detail'] ?? e.message ?? 'Failed to create ticket')
+            : e.toString();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(msg.toString()), backgroundColor: Colors.red[700]));
       }
     } finally {
       if (mounted) setState(() => _submitting = false);
