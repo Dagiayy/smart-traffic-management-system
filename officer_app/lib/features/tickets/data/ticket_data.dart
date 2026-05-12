@@ -214,6 +214,7 @@ class TicketDraft {
         'road_name': roadName,
         'contact_number': contactNumber,
         'national_id': nationalId,
+        'created_at': DateTime.now().toIso8601String(),
         'is_offline': true,
       };
 }
