@@ -18,7 +18,6 @@ class DashboardScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final user      = ref.watch(currentUserProvider);
     final summaryAsync = ref.watch(dashboardSummaryProvider);
-    final offlineQueue = ref.watch(offlineQueueProvider);
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -101,10 +100,6 @@ class DashboardScreen extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // ── Sync warning banner ─────────────────────────────
-                    if (offlineQueue.isNotEmpty)
-                      _SyncBanner(count: offlineQueue.length),
-
                     // ── Summary cards ───────────────────────────────────
                     summaryAsync.when(
                       loading: () => const _SummaryLoading(),
@@ -142,37 +137,6 @@ class DashboardScreen extends ConsumerWidget {
   }
 }
 
-// ── Sync Banner ───────────────────────────────────────────────────────────
-class _SyncBanner extends StatelessWidget {
-  const _SyncBanner({required this.count});
-  final int count;
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: AppSpacing.md),
-      padding: const EdgeInsets.all(AppSpacing.sm),
-      decoration: BoxDecoration(
-        color: AppColors.warningSurface,
-        borderRadius: AppRadius.radiusMd,
-        border: Border.all(color: AppColors.warning.withValues(alpha: 0.3)),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.cloud_upload_outlined, color: AppColors.warning, size: 20),
-          const SizedBox(width: AppSpacing.xs),
-          Expanded(child: Text('$count record${count == 1 ? '' : 's'} pending sync',
-              style: AppTypography.labelMedium.copyWith(color: AppColors.warningText))),
-          TextButton(
-            onPressed: () => context.push('/sync'),
-            style: TextButton.styleFrom(foregroundColor: AppColors.warning, textStyle: AppTypography.labelSmall),
-            child: const Text('Sync now'),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 // ── Summary Grid ──────────────────────────────────────────────────────────
 class _SummaryGrid extends StatelessWidget {
   const _SummaryGrid({required this.summary});
@@ -183,7 +147,7 @@ class _SummaryGrid extends StatelessWidget {
       (Icons.receipt_long_outlined, 'Today',          '${summary.ticketsToday}',          AppColors.primary),
       (Icons.date_range_outlined,   'This Week',      '${summary.ticketsWeek}',           AppColors.accent),
       (Icons.pending_outlined,      'Pending',        '${summary.pendingSubmissions}',    AppColors.warning),
-      (Icons.cloud_upload_outlined, 'Unsynced',       '${summary.unsyncedCount}',         AppColors.danger),
+      (Icons.check_circle_outline,  'Confirmed',      '${summary.confirmedViolations}',   AppColors.success),
     ];
     return GridView.count(
       crossAxisCount: 2,
@@ -233,7 +197,6 @@ class _QuickActions extends StatelessWidget {
       (Icons.add_circle_outline,   'New Ticket',    '/new-ticket',         AppColors.primary),
       (Icons.list_alt_outlined,    'My Cases',      '/tickets',            AppColors.accent),
       (Icons.search_outlined,      'Search',        '/search-violations',  AppColors.info),
-      (Icons.sync_outlined,        'Sync Records',  '/sync',               AppColors.warning),
       (Icons.bar_chart_outlined,   'Reports',       '/reports',            AppColors.gray600),
       (Icons.person_outline,       'My Activity',   '/performance',        AppColors.gray600),
     ];

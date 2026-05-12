@@ -15,7 +15,6 @@ import '../../features/settings/settings_screen.dart';
 import '../../features/splash/splash_screen.dart';
 import '../../features/supervisor/supervisor_screen.dart';
 import '../../features/tickets/presentation/new_ticket_screen.dart';
-import '../../features/tickets/presentation/sync_screen.dart';
 import '../../features/tickets/presentation/ticket_detail_screen.dart';
 import '../../features/tickets/presentation/tickets_list_screen.dart';
 import '../../features/violations/violation_search_screen.dart';
@@ -150,7 +149,6 @@ class AppRouter {
         // Full-screen flows (no bottom nav)
         GoRoute(path: '/new-ticket',        builder: (_, __) => const NewTicketScreen()),
         GoRoute(path: '/tickets/:id',       builder: (_, state) => TicketDetailScreen(id: state.pathParameters['id']!)),
-        GoRoute(path: '/sync',              builder: (_, __) => const SyncScreen()),
         GoRoute(path: '/supervisor',        builder: (_, __) => const SupervisorScreen()),
         GoRoute(path: '/performance',       builder: (_, __) => const PerformanceScreen()),
         GoRoute(path: '/notifications',     builder: (_, __) => const NotificationsScreen()),
