@@ -84,25 +84,25 @@ class AutoSyncService {
         await AppStorage.instance.removeFromOfflineQueue(id);
       }
 
-      // Record last sync time
-      await AppStorage.instance
-          .setLastSyncTime(DateTime.now().toIso8601String());
+      await AppStorage.instance.setLastSyncTime(DateTime.now().toIso8601String());
 
+      // Only show a notification when something actually failed — success is silent.
       if (failed.isNotEmpty) {
         _showSnackBar(
-          '${failed.length} ticket(s) failed to sync. Tap Sync Status to retry.',
+          '${failed.length} ticket(s) could not be uploaded. Check your connection and retry.',
           isError: true,
         );
       }
     } catch (e) {
-      _showSnackBar('Auto-sync failed: $e', isError: true);
+      _showSnackBar('Upload failed: $e. Will retry when connected.', isError: true);
     } finally {
       _running = false;
     }
   }
 
-  /// Public method to manually trigger a sync (e.g., "Retry Sync Now" button).
-  Future<void> triggerSync() => _trySync();
+  /// Kick off a sync attempt immediately (non-blocking).
+  /// Safe to call even if a sync is already running — duplicate runs are suppressed.
+  void triggerSync() { _trySync(); }
 
   void _showSnackBar(String message, {bool isError = false}) {
     final messenger = _messengerKey?.currentState;

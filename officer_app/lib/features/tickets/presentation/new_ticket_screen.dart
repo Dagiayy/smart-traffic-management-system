@@ -1,10 +1,12 @@
 import 'dart:io';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../../../core/services/auto_sync_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
@@ -79,16 +81,33 @@ class _NewTicketScreenState extends ConsumerState<NewTicketScreen> {
       final repo = ref.read(ticketsRepositoryProvider);
       FieldTicket? ticket;
 
-      // Try to create ticket on backend
+      // Try to create ticket on backend immediately.
+      // Only fall back to the offline queue on genuine network errors —
+      // not on 4xx/5xx responses (those are validation/server issues the
+      // officer should see immediately, not silently queue).
       try {
         ticket = await repo.createTicket(draft);
-      } catch (_) {
-        // Truly offline — save to local queue and exit
+      } on DioException catch (e) {
+        final isNetworkError = e.type == DioExceptionType.connectionError ||
+            e.type == DioExceptionType.connectionTimeout ||
+            e.type == DioExceptionType.receiveTimeout ||
+            e.type == DioExceptionType.sendTimeout ||
+            e.response == null;
+        if (!isNetworkError) rethrow; // surface validation errors to the officer
+
+        // Genuine network outage — save to queue and kick off an immediate
+        // sync attempt (will succeed silently once connectivity returns).
         await AppStorage.instance.addToOfflineQueue(draft.toOfflineJson());
-        ref.read(offlineQueueProvider.notifier).state = AppStorage.instance.getOfflineQueue();
+        ref.read(offlineQueueProvider.notifier).state =
+            AppStorage.instance.getOfflineQueue();
+        // Attempt sync right away — resolves cases where the outage was brief
+        AutoSyncService.instance.triggerSync();
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Saved offline. Will sync when connected.')));
+            const SnackBar(
+              content: Text('No connection — saved locally. Will upload automatically when online.'),
+              duration: Duration(seconds: 3),
+            ));
           context.pop();
         }
         return;
