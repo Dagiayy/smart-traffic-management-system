@@ -67,6 +67,9 @@ dependencies:
 
   # Misc
   url_launcher: ^6.3.0
+  share_plus: ^9.0.0
+  pdf: ^3.11.0
+  printing: ^5.13.1
   permission_handler: ^11.3.1
   package_info_plus: ^8.0.0
   device_info_plus: ^10.1.0

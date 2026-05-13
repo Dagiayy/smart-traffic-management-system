@@ -66,11 +66,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         ],
       );
       if (mounted) {
-        // Send to OTP verification screen passing phone
-        context.go('/verify-otp', extra: {
-          'identifier': _phone.text.trim(),
-          'purpose': 'verify',
-        });
+        context.go('/verify-email', extra: {'email': _email.text.trim()});
       }
     } catch (e) {
       if (mounted) {
