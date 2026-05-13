@@ -23,11 +23,66 @@ class RegisterView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        serializer = RegisterSerializer(data=request.data)
+        # Pre-process incoming data to support Flutter app's format
+        data = request.data.copy()
+
+        # Map Flutter field names to serializer field names
+        if 'phone' in data and 'phone_number' not in data:
+            data['phone_number'] = data['phone']
+
+        # Auto-fill password_confirm if missing (Flutter sends only password)
+        if 'password' in data and 'password_confirm' not in data:
+            data['password_confirm'] = data['password']
+
+        # Extract vehicles list before serialization (not a serializer field)
+        vehicles_list = data.pop('vehicles', None)
+        if isinstance(vehicles_list, list) and len(vehicles_list) > 0:
+            # Use first vehicle as the flat plate_number/vehicle_type for serializer
+            first = vehicles_list[0]
+            if 'plate_number' not in data and 'plate_number' in first:
+                data['plate_number'] = first.get('plate_number', '')
+            if 'vehicle_type' not in data and 'type' in first:
+                data['vehicle_type'] = first.get('type', 'CAR')
+            # Keep remaining vehicles to create after user save
+            extra_vehicles = vehicles_list[1:]
+        else:
+            extra_vehicles = []
+
+        serializer = RegisterSerializer(data=data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
+
+        # Create additional vehicles from the list
+        if extra_vehicles:
+            from vehicles.models import Vehicle
+            for v in extra_vehicles:
+                plate = v.get('plate_number', '').strip().upper()
+                vtype = v.get('type', 'CAR')
+                if plate:
+                    Vehicle.objects.get_or_create(
+                        plate_number=plate,
+                        defaults={'owner': user, 'vehicle_type': vtype},
+                    )
+
+        # Send email verification OTP if user has email
+        email_verification_required = False
+        if user.email:
+            try:
+                code = OTPVerification.generate_otp()
+                otp = OTPVerification(
+                    user=user,
+                    purpose='VERIFY_EMAIL',
+                    expires_at=timezone.now() + timedelta(minutes=10),
+                )
+                otp.set_code(code)
+                otp.save()
+                _send_otp(user, code, 'VERIFY_EMAIL')
+                email_verification_required = True
+            except Exception:
+                pass
+
         refresh = RefreshToken.for_user(user)
-        return Response({
+        response_data = {
             'access': str(refresh.access_token),
             'refresh': str(refresh),
             'user': {
@@ -36,8 +91,65 @@ class RegisterView(APIView):
                 'role': user.role,
                 'email': user.email,
                 'phone_number': user.phone_number,
-            }
-        }, status=status.HTTP_201_CREATED)
+            },
+        }
+        if email_verification_required:
+            response_data['email_verification_required'] = True
+
+        return Response(response_data, status=status.HTTP_201_CREATED)
+
+
+class SendEmailVerificationView(APIView):
+    """POST /auth/email/send-verification/ — resend email verification OTP."""
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        email = request.data.get('email', '').strip()
+        if not email:
+            return Response({'error': 'Email is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = CustomUser.objects.filter(email=email).first()
+        if not user:
+            return Response({'message': 'If an account exists, a code has been sent.'})
+
+        code = OTPVerification.generate_otp()
+        otp = OTPVerification(
+            user=user,
+            purpose='VERIFY_EMAIL',
+            expires_at=timezone.now() + timedelta(minutes=10),
+        )
+        otp.set_code(code)
+        otp.save()
+        _send_otp(user, code, 'VERIFY_EMAIL')
+        return Response({'message': 'Verification code sent.'})
+
+
+class VerifyEmailView(APIView):
+    """POST /auth/email/verify/ — verify email with OTP code."""
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        email = request.data.get('email', '').strip()
+        code = request.data.get('code', '').strip()
+
+        if not email or not code:
+            return Response({'error': 'Email and code are required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = CustomUser.objects.filter(email=email).first()
+        if not user:
+            return Response({'error': 'Invalid code.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        otp = OTPVerification.objects.filter(
+            user=user,
+            purpose='VERIFY_EMAIL',
+            used_at__isnull=True,
+        ).order_by('-created_at').first()
+
+        if not otp or otp.is_expired() or not otp.verify_code(code):
+            return Response({'error': 'Invalid or expired code.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        otp.mark_used()
+        return Response({'message': 'Email verified successfully.'})
 
 
 class LoginView(APIView):

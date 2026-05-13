@@ -126,6 +126,14 @@ Future<void> bootstrap() async {
   void updateUser(AppUser user) {
     state = AuthAuthenticated(user);
   }
+
+  /// Refresh user from backend and update state.
+  Future<void> refreshUser() async {
+    try {
+      final user = await _repo.getMe();
+      state = AuthAuthenticated(user);
+    } catch (_) {}
+  }
 }
 
 final authControllerProvider =

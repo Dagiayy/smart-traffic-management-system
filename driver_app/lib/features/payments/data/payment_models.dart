@@ -50,6 +50,7 @@ class Receipt {
   final double amount;
   final String paymentMethod;
   final String violationRef;
+  final String? receiptNumber;
 
   const Receipt({
     required this.id,
@@ -58,6 +59,7 @@ class Receipt {
     required this.amount,
     required this.paymentMethod,
     required this.violationRef,
+    this.receiptNumber,
   });
 
   factory Receipt.fromJson(Map<String, dynamic> j) => Receipt(
@@ -68,5 +70,6 @@ class Receipt {
         amount: AppFormat.parseDouble(j['amount'] ?? 0),
         paymentMethod: j['payment_method'] ?? 'MOBILE_MONEY',
         violationRef: j['violation_reference'] ?? j['fine_id']?.toString() ?? '',
+        receiptNumber: j['receipt_number'] as String?,
       );
 }

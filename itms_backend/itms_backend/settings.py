@@ -196,6 +196,9 @@ EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
 EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
 DEFAULT_FROM_EMAIL = 'ITMS Traffic System <noreply@itms.gov.et>'
 
+# ── Chapa Payment Gateway ──────────────────────────────────────────────────
+CHAPA_SECRET_KEY = config('CHAPA_SECRET_KEY', default='CHASECK_TEST-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx')
+
 # ── Auth ───────────────────────────────────────────────────────────────────
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},

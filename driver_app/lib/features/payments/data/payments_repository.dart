@@ -41,4 +41,18 @@ class PaymentsRepository {
     final res = await _api.get('/citizen/receipts/$id/');
     return Receipt.fromJson(res.data as Map<String, dynamic>);
   }
+
+  Future<Map<String, dynamic>> initiateChapa({required String fineId}) async {
+    final res = await _api.post('/citizen/fines/$fineId/chapa/initiate/');
+    return res.data as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> verifyChapaPayment({
+    required String fineId,
+    required String txRef,
+  }) async {
+    final res = await _api.get('/citizen/fines/$fineId/chapa/verify/',
+        query: {'tx_ref': txRef});
+    return res.data as Map<String, dynamic>;
+  }
 }

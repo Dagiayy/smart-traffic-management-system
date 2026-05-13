@@ -13,4 +13,5 @@ urlpatterns = [
     path('otp/verify/',       views.VerifyOTPView.as_view(),     name='otp-verify'),
     path('password/reset/',   views.ResetPasswordView.as_view(), name='password-reset'),
     path('push-token/',       views.PushTokenView.as_view(),     name='push-token'),
+    path('email/verify/',     views.VerifyEmailView.as_view(),   name='email-verify'),
 ]

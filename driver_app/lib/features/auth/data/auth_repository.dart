@@ -123,6 +123,19 @@ class AuthRepository {
     await AppStorage.instance.clearUserCache();
   }
 
+  /// POST /auth/email/verify/
+  Future<void> verifyEmail({required String email, required String code}) async {
+    await _api.post('/auth/email/verify/', data: {'email': email, 'code': code});
+  }
+
+  /// Resend email verification
+  Future<void> resendEmailVerification({required String email}) async {
+    await _api.post('/auth/otp/send/', data: {
+      'phone_or_email': email,
+      'purpose': 'verify',
+    });
+  }
+
   /// POST /auth/push-token/
   Future<void> registerPushToken(
       {required String token, required String platform}) async {

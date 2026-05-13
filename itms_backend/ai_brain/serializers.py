@@ -46,15 +46,22 @@ class CongestedZoneSerializer(serializers.ModelSerializer):
     title = serializers.CharField(source='intersection.name', read_only=True)
     message = serializers.SerializerMethodField()
     type = serializers.CharField(default='CONGESTION', read_only=True)
+    location_name = serializers.CharField(source='intersection.name', read_only=True)
+    created_at = serializers.DateTimeField(source='detected_at', read_only=True)
+    is_active = serializers.SerializerMethodField()
 
     class Meta:
         model = CongestedZone
         fields = ['id', 'intersection_name', 'lat', 'lng', 'severity',
                   'affected_lanes', 'estimated_delay_seconds',
-                  'detected_at', 'resolved_at', 'title', 'message', 'type']
+                  'detected_at', 'resolved_at', 'title', 'message', 'type',
+                  'location_name', 'created_at', 'is_active']
 
     def get_message(self, obj):
         return f'Heavy congestion near {obj.intersection.name}. Estimated delay: {obj.estimated_delay_seconds}s.'
+
+    def get_is_active(self, obj):
+        return obj.resolved_at is None
 
 
 class AIAlertSerializer(serializers.ModelSerializer):
