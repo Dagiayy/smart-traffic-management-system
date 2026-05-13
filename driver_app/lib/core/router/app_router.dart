@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../features/alerts/alerts_screen.dart';
+import '../../features/auth/presentation/email_verification_screen.dart';
 import '../../features/auth/presentation/forgot_password_screen.dart';
 import '../../features/auth/presentation/login_screen.dart';
 import '../../features/auth/presentation/otp_verification_screen.dart';
@@ -12,6 +13,7 @@ import '../../features/home_shell.dart';
 import '../../features/notifications/notifications_screen.dart';
 import '../../features/onboarding/onboarding_screen.dart';
 import '../../features/payments/payments_screen.dart';
+import '../../features/profile/personal_info_screen.dart';
 import '../../features/profile/profile_screen.dart';
 import '../../features/settings/settings_screen.dart';
 import '../../features/splash/splash_screen.dart';
@@ -58,6 +60,13 @@ class AppRouter {
         },
       ),
       GoRoute(
+        path: '/verify-email',
+        builder: (_, state) {
+          final e = state.extra as Map<String, dynamic>? ?? {};
+          return EmailVerificationScreen(email: e['email'] ?? '');
+        },
+      ),
+      GoRoute(
         path: '/reset-password',
         builder: (ctx, state) {
           final extra = (state.extra as Map?) ?? const {};
@@ -99,6 +108,10 @@ class AppRouter {
       GoRoute(
         path: '/profile',
         builder: (_, __) => const ProfileScreen(),
+      ),
+      GoRoute(
+        path: '/profile/personal-info',
+        builder: (_, __) => const PersonalInfoScreen(),
       ),
       GoRoute(
         path: '/notifications',

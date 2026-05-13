@@ -66,17 +66,20 @@ class ProfileScreen extends ConsumerWidget {
             _MenuTile(
               icon: Icons.person_outline,
               label: 'Personal Information',
-              onTap: () {},
+              onTap: () => context.push('/profile/personal-info'),
             ),
             _MenuTile(
               icon: Icons.directions_car_outlined,
               label: 'My Vehicles',
-              onTap: () {},
+              onTap: () => context.push('/profile/vehicles'),
             ),
             _MenuTile(
-              icon: Icons.folder_outlined,
-              label: 'Documents Center',
-              onTap: () {},
+              icon: Icons.lock_outline,
+              label: 'Change Password',
+              onTap: () => context.push('/verify-otp', extra: {
+                'identifier': user?.email ?? user?.phoneNumber ?? '',
+                'purpose': 'reset',
+              }),
             ),
 
             const SizedBox(height: AppSpacing.md),
@@ -97,12 +100,12 @@ class ProfileScreen extends ConsumerWidget {
             _MenuTile(
               icon: Icons.help_outline,
               label: 'Help Center',
-              onTap: () {},
+              onTap: () => _showHelpDialog(context),
             ),
             _MenuTile(
               icon: Icons.privacy_tip_outlined,
               label: 'Privacy Policy',
-              onTap: () {},
+              onTap: () => _showPrivacyDialog(context),
             ),
 
             const SizedBox(height: AppSpacing.xl),
@@ -115,6 +118,59 @@ class ProfileScreen extends ConsumerWidget {
             const SizedBox(height: AppSpacing.lg),
           ],
         ),
+      ),
+    );
+  }
+
+  void _showHelpDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Help Center'),
+        content: const Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Contact us for support:'),
+            SizedBox(height: 12),
+            Text('Phone: +251 11 551 7777'),
+            Text('Email: support@trafficauthority.gov.et'),
+            Text('Hours: Mon–Fri, 8:00 AM – 5:00 PM'),
+            SizedBox(height: 12),
+            Text('For emergencies, call 945 (Traffic Police).'),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Close')),
+        ],
+      ),
+    );
+  }
+
+  void _showPrivacyDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Privacy Policy'),
+        content: const SingleChildScrollView(
+          child: Text(
+            'The Integrated Traffic Management System collects and processes '
+            'your personal data strictly for the purpose of traffic law enforcement '
+            'and compliance monitoring.\n\n'
+            'Your data is stored securely and is not shared with third parties '
+            'except as required by law or with your explicit consent.\n\n'
+            'You have the right to access, correct, or request deletion of your '
+            'personal data at any time by contacting the Traffic Authority.\n\n'
+            'For full policy details, visit trafficauthority.gov.et/privacy.',
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Close')),
+        ],
       ),
     );
   }
