@@ -24,15 +24,18 @@ class Dispute {
 
   factory Dispute.fromJson(Map<String, dynamic> j) => Dispute(
         id: j['id'].toString(),
-        violationId: j['violation']?.toString() ??
+        violationId: j['violation_ref']?.toString() ??
+            j['violation']?.toString() ??
             j['violation_id']?.toString() ?? '',
         reason: j['reason'] ?? '',
         description: j['description'] ?? '',
         status: j['status'] ?? 'SUBMITTED',
-        createdAt:
-            DateTime.tryParse(j['created_at'] ?? '') ?? DateTime.now(),
-        adminFeedback: j['admin_notes'] ?? j['feedback'],
-        decision: j['decision'],
+        createdAt: DateTime.tryParse(
+                j['submitted_at'] ?? j['created_at'] ?? '') ??
+            DateTime.now(),
+        adminFeedback: j['decision']?['reason'] ??
+            j['admin_notes'] ?? j['feedback'],
+        decision: j['decision']?['decision']?.toString(),
       );
 }
 
