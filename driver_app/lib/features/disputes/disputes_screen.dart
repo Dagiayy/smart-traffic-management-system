@@ -73,13 +73,19 @@ class DisputesScreen extends ConsumerWidget {
   }
 
   void _showSubmitSheet(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => const _SubmitDisputeSheet(),
-    );
+    showDisputeSheet(context);
   }
+}
+
+/// Public helper — call from anywhere (e.g. violation detail) to open the
+/// dispute submission sheet, optionally pre-selecting a violation.
+void showDisputeSheet(BuildContext context, {Violation? preSelected}) {
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (_) => SubmitDisputeSheet(preSelected: preSelected),
+  );
 }
 
 // ── Dispute Tile ──────────────────────────────────────────────────────────
@@ -252,20 +258,26 @@ class _DisputeTile extends ConsumerWidget {
 }
 
 // ── Submit Dispute Sheet ──────────────────────────────────────────────────
-class _SubmitDisputeSheet extends ConsumerStatefulWidget {
-  const _SubmitDisputeSheet();
+class SubmitDisputeSheet extends ConsumerStatefulWidget {
+  const SubmitDisputeSheet({super.key, this.preSelected});
+  final Violation? preSelected;
 
   @override
-  ConsumerState<_SubmitDisputeSheet> createState() =>
-      _SubmitDisputeSheetState();
+  ConsumerState<SubmitDisputeSheet> createState() => SubmitDisputeSheetState();
 }
 
-class _SubmitDisputeSheetState extends ConsumerState<_SubmitDisputeSheet> {
+class SubmitDisputeSheetState extends ConsumerState<SubmitDisputeSheet> {
   final _formKey = GlobalKey<FormState>();
   final _description = TextEditingController();
   String _reason = 'WRONG_VEHICLE';
   bool _submitting = false;
   Violation? _selectedViolation;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedViolation = widget.preSelected;
+  }
 
   static const _reasons = [
     ('WRONG_VEHICLE', 'Wrong vehicle identified'),

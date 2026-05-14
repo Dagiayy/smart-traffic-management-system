@@ -27,6 +27,11 @@ class AdminViolationsListView(generics.ListAPIView):
             if v:
                 qs = qs.filter(**{field: v})
 
+        # Specific plate filter
+        plate = self.request.query_params.get('plate')
+        if plate:
+            qs = qs.filter(vehicle__plate_number__icontains=plate)
+
         date_from = self.request.query_params.get('date_from')
         date_to = self.request.query_params.get('date_to')
         if date_from:
@@ -36,7 +41,14 @@ class AdminViolationsListView(generics.ListAPIView):
 
         search = self.request.query_params.get('search')
         if search:
-            qs = qs.filter(Q(vehicle__plate_number__icontains=search) | Q(officer__full_name__icontains=search))
+            qs = qs.filter(
+                Q(vehicle__plate_number__icontains=search) |
+                Q(vehicle__owner__full_name__icontains=search) |
+                Q(driver_name__icontains=search) |
+                Q(officer__full_name__icontains=search) |
+                Q(violation_type__name__icontains=search) |
+                Q(intersection__name__icontains=search)
+            )
 
         return qs.order_by('-detected_at')
 
@@ -63,18 +75,59 @@ class AdminViolationDetailView(APIView):
             }
             for h in violation.status_history.order_by('-changed_at')
         ]
-        # Include linked fine
+        # Include linked fine with full payment/receipt history
         try:
             fine = violation.fine
-            data['fine'] = {'id': str(fine.id), 'amount': str(fine.amount), 'status': fine.status}
+            payments_qs = fine.payments.select_related('receipt').order_by('-created_at')
+            data['fine'] = {
+                'id': str(fine.id),
+                'amount': str(fine.amount),
+                'amount_paid': str(fine.amount_paid),
+                'status': fine.status,
+                'due_date': fine.due_date.isoformat() if fine.due_date else None,
+                'is_overdue': fine.is_overdue,
+                'payments': [
+                    {
+                        'id': str(p.id),
+                        'amount': str(p.amount),
+                        'method': p.payment_method,
+                        'status': p.status,
+                        'transaction_reference': p.transaction_reference,
+                        'paid_at': p.paid_at.isoformat() if p.paid_at else None,
+                        'receipt_number': p.receipt.receipt_number if hasattr(p, 'receipt') and p.receipt else None,
+                        'receipt_id': str(p.receipt.id) if hasattr(p, 'receipt') and p.receipt else None,
+                    }
+                    for p in payments_qs
+                ],
+            }
         except Exception:
             data['fine'] = None
-        # Include dispute
+        # Include all disputes with decisions
         try:
-            dispute = violation.disputes.first()
-            data['dispute'] = {'id': str(dispute.id), 'status': dispute.status} if dispute else None
+            disputes_qs = violation.disputes.select_related(
+                'citizen', 'decision', 'decision__decided_by'
+            ).order_by('-submitted_at')
+            data['disputes'] = [
+                {
+                    'id': str(d.id),
+                    'status': d.status,
+                    'reason': d.reason,
+                    'description': d.description,
+                    'submitted_at': d.submitted_at.isoformat(),
+                    'resolved_at': d.resolved_at.isoformat() if d.resolved_at else None,
+                    'citizen_name': d.citizen.full_name if d.citizen else None,
+                    'citizen_phone': d.citizen.phone_number if d.citizen else None,
+                    'decision': {
+                        'decision': d.decision.decision,
+                        'reason': d.decision.reason,
+                        'decided_at': d.decision.decided_at.isoformat(),
+                        'decided_by': d.decision.decided_by.full_name if d.decision.decided_by else 'System',
+                    } if hasattr(d, 'decision') and d.decision else None,
+                }
+                for d in disputes_qs
+            ]
         except Exception:
-            data['dispute'] = None
+            data['disputes'] = []
         return Response(data)
 
     def patch(self, request, pk):

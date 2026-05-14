@@ -11,6 +11,7 @@ import '../../shared/widgets/app_button.dart';
 import '../../shared/widgets/app_card.dart';
 import '../../shared/widgets/state_widgets.dart';
 import '../../shared/widgets/status_badge.dart';
+import '../disputes/disputes_screen.dart';
 import 'data/violation_model.dart';
 import 'data/violations_providers.dart';
 
@@ -142,7 +143,7 @@ class _DetailBody extends StatelessWidget {
             label: 'Submit Dispute',
             variant: AppButtonVariant.secondary,
             icon: Icons.gavel_outlined,
-            onPressed: () => context.push('/disputes'),
+            onPressed: () => showDisputeSheet(context, preSelected: violation),
           ),
         if (canDispute) const SizedBox(height: AppSpacing.sm),
         AppButton(
