@@ -17,6 +17,12 @@ export const violationsApi = {
   list: (params) => apiClient.get('/admin/violations/', { params }),
   detail: (id) => apiClient.get(`/admin/violations/${id}/`),
   update: (id, data) => apiClient.patch(`/admin/violations/${id}/`, data),
+  confirm: (id, notes = '') =>
+    apiClient.patch(`/admin/violations/${id}/`, { status: 'CONFIRMED', admin_notes: notes }),
+  dismiss: (id, notes = '') =>
+    apiClient.patch(`/admin/violations/${id}/`, { status: 'DISMISSED', admin_notes: notes }),
+  underReview: (id, notes = '') =>
+    apiClient.patch(`/admin/violations/${id}/`, { status: 'UNDER_REVIEW', admin_notes: notes }),
   evidence: (params) => apiClient.get('/admin/evidence/', { params }),
   hotspotMap: (params) => apiClient.get('/admin/hotspot-map/', { params }),
 };

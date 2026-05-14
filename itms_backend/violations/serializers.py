@@ -43,6 +43,19 @@ class ViolationSerializer(serializers.ModelSerializer):
     evidence = EvidenceSerializer(source='evidence_files', many=True, read_only=True)
     violation_type = ViolationTypeSerializer(read_only=True)
     officer_name = serializers.CharField(source='officer.full_name', read_only=True, default=None)
+    # Vehicle registration info
+    vehicle_make = serializers.CharField(source='vehicle.make', read_only=True, default=None)
+    vehicle_model = serializers.CharField(source='vehicle.model', read_only=True, default=None)
+    vehicle_year = serializers.IntegerField(source='vehicle.year', read_only=True, default=None)
+    vehicle_reg_type = serializers.CharField(source='vehicle.vehicle_type', read_only=True, default=None)
+    vehicle_reg_color = serializers.CharField(source='vehicle.color', read_only=True, default=None)
+    registration_expiry = serializers.DateField(source='vehicle.registration_expiry', read_only=True, default=None)
+    # Vehicle owner (registered citizen)
+    owner_id = serializers.CharField(source='vehicle.owner.id', read_only=True, default=None)
+    owner_name = serializers.CharField(source='vehicle.owner.full_name', read_only=True, default=None)
+    owner_phone = serializers.CharField(source='vehicle.owner.phone_number', read_only=True, default=None)
+    owner_email = serializers.CharField(source='vehicle.owner.email', read_only=True, default=None)
+    owner_national_id = serializers.CharField(source='vehicle.owner.national_id', read_only=True, default=None)
 
     class Meta:
         model = Violation
@@ -53,6 +66,11 @@ class ViolationSerializer(serializers.ModelSerializer):
             'notes', 'driver_name', 'driver_license', 'vehicle_color',
             'fine_amount', 'evidence', 'officer_name',
             'detected_at', 'created_at', 'updated_at',
+            # vehicle registration
+            'vehicle_make', 'vehicle_model', 'vehicle_year',
+            'vehicle_reg_type', 'vehicle_reg_color', 'registration_expiry',
+            # owner
+            'owner_id', 'owner_name', 'owner_phone', 'owner_email', 'owner_national_id',
         ]
 
     def get_fine_amount(self, obj):
